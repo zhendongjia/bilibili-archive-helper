@@ -40,7 +40,6 @@ const elements = {
 let activeTab = null;
 let analyzed = null;
 let logLines = [];
-let queuePoll = null;
 
 function log(message) {
   const timestamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -205,17 +204,20 @@ async function collectDanmaku(context, historyMode) {
   }
 
   const segmentCount = Math.max(1, Math.ceil(context.durationSeconds / 360));
+  let currentComments = 0;
   for (let index = 1; index <= segmentCount; index += 1) {
     progress(15 + Math.round(index / segmentCount * 25), `当前弹幕 ${index}/${segmentCount}`);
     try {
       const response = await pageFetch(danmakuSegmentUrl(context.cid, index), true);
-      groups.push(parseProtobufDanmaku(base64ToBytes(response.base64)));
+      const parsed = parseProtobufDanmaku(base64ToBytes(response.base64));
+      groups.push(parsed);
+      currentComments += parsed.length;
     } catch (error) {
       log(`当前分段 ${index} 失败：${error.message || error}`);
     }
     if (index < segmentCount) await politeDelay();
   }
-  log(`当前分段：${segmentCount} 段`);
+  log(`当前分段：${segmentCount} 段，${currentComments} 条普通弹幕`);
 
   const months = historyMonths(publishDate(context), historyMode);
   let historySnapshots = 0;
@@ -286,7 +288,6 @@ async function startDownload() {
 
     if (elements.includeDanmaku.checked) {
       const comments = await collectDanmaku(context, elements.historyMode.value);
-      if (!comments.length) throw new Error("没有取得任何弹幕");
       const width = mediaSelection.media.width || context.episode?.dimension?.width || context.pageInfo?.dimension?.width || 1280;
       const height = mediaSelection.media.height || context.episode?.dimension?.height || context.pageInfo?.dimension?.height || 720;
       const xml = toBilibiliXml(comments, context.cid);
@@ -294,7 +295,8 @@ async function startDownload() {
       queue.push(textItem(folderFilename(folder, `${context.baseName}_弹幕.xml`), xml, "application/xml;charset=utf-8"));
       queue.push(textItem(folderFilename(folder, `${context.baseName}_弹幕.ass`), ass, "text/x-ssa;charset=utf-8"));
       queue.push(textItem(folderFilename(folder, `${mediaStem}.ass`), ass, "text/x-ssa;charset=utf-8"));
-      log(`合并后弹幕：${comments.length} 条`);
+      if (comments.length) log(`合并后弹幕：${comments.length} 条`);
+      else log("该 CID 当前没有普通弹幕，仍会生成合法的空 XML/ASS，不阻塞视频保存");
     }
 
     const instructions = mergeInstructions(context.baseName, mediaSelection);
@@ -308,11 +310,20 @@ async function startDownload() {
     }
 
     if (!queue.length) throw new Error("没有勾选任何输出");
-    progress(85, "加入下载队列");
-    const response = await chrome.runtime.sendMessage({ type: "ENQUEUE_DOWNLOADS", items: queue });
-    if (!response?.ok) throw new Error(response?.error || "无法创建下载队列");
-    log(`下载队列已创建：${queue.length} 个文件`);
-    monitorQueue();
+    progress(85, "打开保存页面");
+    const job = {
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      sourceUrl: page.url,
+      title: `${context.showTitle} · ${context.title}`,
+      quality: mediaSelection.label,
+      items: queue,
+    };
+    await chrome.storage.local.set({ pendingDownloadJob: job });
+    await chrome.tabs.create({ url: chrome.runtime.getURL(`manager.html?job=${encodeURIComponent(job.id)}`) });
+    progress(100, "等待选择目录");
+    log(`保存页面已打开：${queue.length} 个文件。只需选择一次目录。`);
+    window.close();
   } catch (error) {
     progress(0, "失败");
     log(`错误：${error.message || error}`);
@@ -322,39 +333,10 @@ async function startDownload() {
   }
 }
 
-function monitorQueue() {
-  if (queuePoll) clearInterval(queuePoll);
-  const poll = async () => {
-    const response = await chrome.runtime.sendMessage({ type: "GET_QUEUE" });
-    const queue = response?.queue;
-    if (!queue) return;
-    const done = queue.completed + queue.failed;
-    progress(85 + Math.round(done / Math.max(1, queue.total) * 15), queue.status === "running" ? `${done}/${queue.total}` : "完成");
-    if (queue.currentFilename) log(`正在下载：${queue.currentFilename}`);
-    if (queue.error) log(`下载提示：${queue.error}`);
-    if (queue.status !== "running") {
-      clearInterval(queuePoll);
-      queuePoll = null;
-      progress(100, queue.failed ? `完成，失败 ${queue.failed}` : "全部完成");
-      log(`队列结束：成功 ${queue.completed}，失败 ${queue.failed}`);
-      elements.download.disabled = !analyzed;
-    }
-  };
-  poll().catch((error) => log(`队列状态错误：${error.message || error}`));
-  queuePoll = setInterval(() => poll().catch(() => {}), 1200);
-}
-
 elements.analyze.addEventListener("click", analyzePage);
 elements.download.addEventListener("click", startDownload);
 elements.quality.addEventListener("change", () => {
   if (analyzed) analyzePage();
 });
 
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.downloadQueue) monitorQueue();
-});
-
 analyzePage();
-chrome.runtime.sendMessage({ type: "GET_QUEUE" }).then((response) => {
-  if (response?.queue?.status === "running") monitorQueue();
-});
