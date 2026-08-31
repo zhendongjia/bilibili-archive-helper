@@ -1,0 +1,48 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build extension archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          git archive \
+            --format=zip \
+            --prefix=bilibili-archive-helper/ \
+            --output="dist/Bilibili-Archive-Helper-${version}.zip" \
+            HEAD -- \
+            manifest.json rules.json \
+            popup.html popup.css popup.js \
+            manager.html manager.css manager.js \
+            README.md README.zh-CN.md \
+            _locales lib native-host \
+            install-native-host.cmd install-native-host.sh
+          sha256sum "dist/Bilibili-Archive-Helper-${version}.zip" > "dist/Bilibili-Archive-Helper-${version}.zip.sha256"
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Bilibili Archive Helper ${{ github.ref_name }}
+          body: |
+            English documentation: https://github.com/zhendongjia/bilibili-archive-helper/blob/main/README.md
+
+            中文说明：https://github.com/zhendongjia/bilibili-archive-helper/blob/main/README.zh-CN.md
+
+            Website: https://zhendongjia.github.io/bilibili-archive-helper/
+          generate_release_notes: true
+          files: |
+            dist/Bilibili-Archive-Helper-*.zip
+            dist/Bilibili-Archive-Helper-*.zip.sha256
