@@ -9,7 +9,7 @@ const script = fs.readFileSync(path.join(docs, "app.js"), "utf8");
 
 for (const required of [
   "Bilibili-Archive-Helper-0.5.2.zip",
-  "5DC0ED96CD2B16D9EBD92F2E8FA150C6A3FC726DD562C81F34B814EB9F643499",
+  "394BEDE39D9D845C97A3DF5967E88D6FBCFFCF61919A554C15C73AE9EE1C1101",
   "README.zh-CN.md",
   "SwitchyOmega",
   "archive-workflow.png",
