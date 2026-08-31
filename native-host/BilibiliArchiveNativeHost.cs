@@ -3,11 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -17,12 +13,17 @@ namespace BilibiliArchiveHelper
     internal static class Program
     {
         private const int MaxMessageBytes = 64 * 1024 * 1024;
-        private const string HelperVersion = "0.4.0";
+        private const string HelperVersion = "0.5.0";
         private static bool SelfTestMode;
         private static readonly Stream Input = Console.OpenStandardInput();
         private static readonly Stream Output = Console.OpenStandardOutput();
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = MaxMessageBytes };
         private static readonly object OutputLock = new object();
+        private static string SessionRoot;
+        private static Dictionary<string, object> SessionMerge;
+        private static FileStream CurrentFile;
+        private static string CurrentFinalPath;
+        private static string CurrentTemporaryPath;
 
         [STAThread]
         private static int Main(string[] args)
@@ -40,15 +41,27 @@ namespace BilibiliArchiveHelper
                     Console.Error.WriteLine("Merge self-test passed: " + args[3]);
                     return 0;
                 }
+                if (args.Length == 4 && args[0] == "--self-test-stream")
+                {
+                    SelfTestMode = true;
+                    StreamSelfTest(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]), Path.GetFullPath(args[3]));
+                    Console.Error.WriteLine("Streaming self-test passed: " + args[3]);
+                    return 0;
+                }
                 while (true)
                 {
                     Dictionary<string, object> message = ReadMessage();
-                    if (message == null) return 0;
+                    if (message == null)
+                    {
+                        CleanupSession();
+                        return 0;
+                    }
                     HandleMessage(message);
                 }
             }
             catch (Exception error)
             {
+                CleanupSession();
                 if (SelfTestMode) Console.Error.WriteLine(error.ToString());
                 else TryWrite(new Dictionary<string, object>
                 {
@@ -73,163 +86,202 @@ namespace BilibiliArchiveHelper
                     { "helperVersion", HelperVersion },
                     { "ffmpegPath", ffmpeg ?? "" },
                     { "ffmpegVersion", String.IsNullOrEmpty(ffmpeg) ? "" : FirstVersionLine(ffmpeg) },
-                    { "message", String.IsNullOrEmpty(ffmpeg) ? "未找到 ffmpeg.exe" : "本地助手已就绪" }
+                    { "message", String.IsNullOrEmpty(ffmpeg) ? "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示一键安装或手动安装。" : "本地助手已就绪" }
                 });
                 return;
             }
 
-            if (action != "saveAndMerge") throw new InvalidOperationException("不支持的操作：" + action);
-            Dictionary<string, object> job = GetDictionary(message, "job");
-            if (job == null) throw new InvalidOperationException("任务内容为空");
-            SaveAndMerge(job);
+            if (action == "startJob")
+            {
+                StartSession(GetDictionary(message, "merge"));
+                return;
+            }
+            if (String.IsNullOrEmpty(SessionRoot)) throw new InvalidOperationException("请先启动保存任务");
+            if (action == "writeText")
+            {
+                WriteTextAtomic(ResolveUnderRoot(SessionRoot, GetString(message, "filename")), GetString(message, "content"));
+                WriteAck();
+                return;
+            }
+            if (action == "startFile")
+            {
+                StartFile(GetString(message, "filename"));
+                WriteAck();
+                return;
+            }
+            if (action == "writeChunk")
+            {
+                WriteChunk(GetString(message, "data"));
+                WriteAck();
+                return;
+            }
+            if (action == "finishFile")
+            {
+                FinishFile();
+                WriteAck();
+                return;
+            }
+            if (action == "abortFile")
+            {
+                AbortFile();
+                WriteAck();
+                return;
+            }
+            if (action == "merge")
+            {
+                CompleteMerge();
+                return;
+            }
+            throw new InvalidOperationException("不支持的操作：" + action);
         }
 
-        private static void SaveAndMerge(Dictionary<string, object> job)
+        private static void StartSession(Dictionary<string, object> merge)
         {
-            Dictionary<string, object> merge = GetDictionary(job, "merge");
             if (merge == null) throw new InvalidOperationException("任务缺少合并信息");
-            string ffmpeg = FindExecutable("ffmpeg.exe");
-            if (String.IsNullOrEmpty(ffmpeg)) throw new FileNotFoundException("未找到 ffmpeg.exe，请先安装 FFmpeg 或将其加入 PATH");
-
-            string root;
+            if (String.IsNullOrEmpty(FindExecutable("ffmpeg.exe")))
+                throw new FileNotFoundException("未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。");
+            CleanupSession();
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "选择 Bilibili 文件保存目录（助手会串行下载并自动合并 MP4）";
+                dialog.Description = "选择 Bilibili 文件保存目录（网络请求仍由 Chrome 发起）";
                 dialog.ShowNewFolderButton = true;
                 if (dialog.ShowDialog() != DialogResult.OK || String.IsNullOrWhiteSpace(dialog.SelectedPath))
                 {
                     WriteMessage(new Dictionary<string, object> { { "type", "cancelled" } });
                     return;
                 }
-                root = Path.GetFullPath(dialog.SelectedPath);
+                SessionRoot = Path.GetFullPath(dialog.SelectedPath);
             }
+            SessionMerge = merge;
+            WriteMessage(new Dictionary<string, object> { { "type", "selected" }, { "path", SessionRoot } });
+        }
 
-            WriteMessage(new Dictionary<string, object> { { "type", "selected" }, { "path", root } });
-            List<Dictionary<string, object>> items = GetDictionaryList(job, "items");
-            if (items.Count == 0) throw new InvalidOperationException("任务没有待保存文件");
-            int workCount = items.Count + 1;
+        private static void StartFile(string relative)
+        {
+            if (CurrentFile != null) throw new InvalidOperationException("上一个文件尚未完成");
+            CurrentFinalPath = ResolveUnderRoot(SessionRoot, relative);
+            CurrentTemporaryPath = CurrentFinalPath + ".part";
+            EnsureDirectory(CurrentFinalPath);
+            DeleteFile(CurrentTemporaryPath);
+            CurrentFile = new FileStream(LongPath(CurrentTemporaryPath), FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.SequentialScan);
+        }
 
-            using (HttpClient client = CreateHttpClient())
+        private static void WriteChunk(string encoded)
+        {
+            if (CurrentFile == null) throw new InvalidOperationException("当前没有打开的媒体文件");
+            if (String.IsNullOrEmpty(encoded)) throw new InvalidOperationException("媒体分块为空");
+            byte[] data = Convert.FromBase64String(encoded);
+            CurrentFile.Write(data, 0, data.Length);
+        }
+
+        private static void FinishFile()
+        {
+            if (CurrentFile == null) throw new InvalidOperationException("当前没有打开的媒体文件");
+            CurrentFile.Flush(true);
+            CurrentFile.Dispose();
+            CurrentFile = null;
+            ReplaceFile(CurrentTemporaryPath, CurrentFinalPath);
+            CurrentTemporaryPath = null;
+            CurrentFinalPath = null;
+        }
+
+        private static void AbortFile()
+        {
+            if (CurrentFile != null)
             {
-                for (int index = 0; index < items.Count; index++)
-                {
-                    Dictionary<string, object> item = items[index];
-                    string relative = GetString(item, "filename");
-                    string destination = ResolveUnderRoot(root, relative);
-                    int begin = (int)Math.Floor(index * 90.0 / workCount);
-                    string kind = GetString(item, "kind");
-                    Progress(begin, String.Format("{0}/{1} · {2}", index + 1, items.Count, relative), "保存：" + relative);
-                    if (kind == "text")
-                    {
-                        WriteTextAtomic(destination, GetString(item, "content"));
-                    }
-                    else if (kind == "url")
-                    {
-                        DownloadAtomic(client, item, destination, delegate(long written, long total)
-                        {
-                            double fraction = total > 0 ? Math.Min(1.0, written / (double)total) : 0;
-                            int percent = begin + (int)Math.Floor((90.0 / workCount) * fraction);
-                            Progress(percent, String.Format("{0}/{1} · {2}", index + 1, items.Count, FormatBytes(written)), null);
-                        });
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException("不支持的文件类型：" + kind);
-                    }
-                }
+                CurrentFile.Dispose();
+                CurrentFile = null;
             }
+            if (!String.IsNullOrEmpty(CurrentTemporaryPath)) DeleteFile(CurrentTemporaryPath);
+            CurrentTemporaryPath = null;
+            CurrentFinalPath = null;
+        }
 
-            string videoPath = ResolveUnderRoot(root, GetString(merge, "videoFilename"));
-            string audioPath = ResolveUnderRoot(root, GetString(merge, "audioFilename"));
-            string outputPath = ResolveUnderRoot(root, GetString(merge, "outputFilename"));
-            Progress(92, "FFmpeg 无损封装", "开始自动合并视频流和音频流……");
+        private static void CompleteMerge()
+        {
+            if (CurrentFile != null) throw new InvalidOperationException("媒体文件仍在写入，不能开始合并");
+            string ffmpeg = FindExecutable("ffmpeg.exe");
+            if (String.IsNullOrEmpty(ffmpeg)) throw new FileNotFoundException("未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。");
+            string videoPath = ResolveUnderRoot(SessionRoot, GetString(SessionMerge, "videoFilename"));
+            string audioPath = ResolveUnderRoot(SessionRoot, GetString(SessionMerge, "audioFilename"));
+            string outputPath = ResolveUnderRoot(SessionRoot, GetString(SessionMerge, "outputFilename"));
             MergeAndVerify(ffmpeg, videoPath, audioPath, outputPath);
-
-            bool keepSources = !merge.ContainsKey("keepSources") || GetBool(merge, "keepSources");
+            bool keepSources = !SessionMerge.ContainsKey("keepSources") || GetBool(SessionMerge, "keepSources");
             if (!keepSources)
             {
                 DeleteFile(videoPath);
                 DeleteFile(audioPath);
             }
-            Progress(100, "保存及合并完成", "FFmpeg 合并并校验成功");
+            string outputFilename = GetString(SessionMerge, "outputFilename");
+            SessionRoot = null;
+            SessionMerge = null;
             WriteMessage(new Dictionary<string, object>
             {
                 { "type", "completed" },
-                { "outputFilename", GetString(merge, "outputFilename") },
+                { "outputFilename", outputFilename },
                 { "keptSources", keepSources }
             });
         }
 
-        private static HttpClient CreateHttpClient()
+        private static void CleanupSession()
         {
-            HttpClientHandler handler = new HttpClientHandler
-            {
-                UseProxy = false,
-                UseCookies = false,
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-            };
-            HttpClient client = new HttpClient(handler) { Timeout = TimeSpan.FromHours(12) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36");
-            client.DefaultRequestHeaders.Referrer = new Uri("https://www.bilibili.com/");
-            client.DefaultRequestHeaders.Accept.ParseAdd("application/octet-stream,*/*");
-            client.DefaultRequestHeaders.TryAddWithoutValidation("Origin", "https://www.bilibili.com");
-            return client;
+            AbortFile();
+            SessionRoot = null;
+            SessionMerge = null;
         }
 
-        private static void DownloadAtomic(HttpClient client, Dictionary<string, object> item, string destination, Action<long, long> onProgress)
+        private static void WriteAck()
         {
-            List<string> urls = GetUrls(item);
-            if (urls.Count == 0) throw new InvalidOperationException("媒体地址为空");
-            List<string> errors = new List<string>();
-            foreach (string url in urls)
+            WriteMessage(new Dictionary<string, object> { { "type", "ack" } });
+        }
+
+        private static void StreamSelfTest(string sourceVideo, string sourceAudio, string root)
+        {
+            Directory.CreateDirectory(LongPath(root));
+            SessionRoot = root;
+            SessionMerge = new Dictionary<string, object>
             {
-                string temporary = destination + ".part";
-                try
+                { "videoFilename", "video.m4s" },
+                { "audioFilename", "audio.m4s" },
+                { "outputFilename", "merged.mp4" },
+                { "keepSources", false }
+            };
+            CopyThroughChunkWriter(sourceVideo, "video.m4s");
+            CopyThroughChunkWriter(sourceAudio, "audio.m4s");
+            string video = ResolveUnderRoot(root, "video.m4s");
+            string audio = ResolveUnderRoot(root, "audio.m4s");
+            string output = ResolveUnderRoot(root, "merged.mp4");
+            MergeAndVerify(FindExecutable("ffmpeg.exe"), video, audio, output);
+            DeleteFile(video);
+            DeleteFile(audio);
+            if (!FileExists(output) || FileExists(video) || FileExists(audio))
+                throw new InvalidOperationException("Streaming self-test did not leave exactly one merged MP4");
+            SessionRoot = null;
+            SessionMerge = null;
+        }
+
+        private static void CopyThroughChunkWriter(string source, string relative)
+        {
+            StartFile(relative);
+            try
+            {
+                using (FileStream input = new FileStream(LongPath(source), FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    EnsureDirectory(destination);
-                    DeleteFile(temporary);
-                    using (HttpResponseMessage response = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).Result)
+                    byte[] buffer = new byte[256 * 1024];
+                    int read;
+                    while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        if (!response.IsSuccessStatusCode) throw new InvalidOperationException("HTTP " + (int)response.StatusCode);
-                        string contentType = response.Content.Headers.ContentType == null ? "" : response.Content.Headers.ContentType.MediaType;
-                        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) ||
-                            contentType.IndexOf("json", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            contentType.IndexOf("xml", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            throw new InvalidOperationException("CDN 返回了非媒体内容：" + contentType);
-                        }
-                        long total = response.Content.Headers.ContentLength ?? 0;
-                        using (Stream source = response.Content.ReadAsStreamAsync().Result)
-                        using (FileStream target = new FileStream(LongPath(temporary), FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.SequentialScan))
-                        {
-                            byte[] buffer = new byte[1024 * 1024];
-                            long written = 0;
-                            int read;
-                            Stopwatch report = Stopwatch.StartNew();
-                            while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
-                            {
-                                target.Write(buffer, 0, read);
-                                written += read;
-                                if (report.ElapsedMilliseconds >= 750)
-                                {
-                                    onProgress(written, total);
-                                    report.Restart();
-                                }
-                            }
-                            target.Flush(true);
-                            onProgress(written, total);
-                        }
+                        byte[] chunk = read == buffer.Length ? buffer : buffer.Take(read).ToArray();
+                        WriteChunk(Convert.ToBase64String(chunk));
                     }
-                    ReplaceFile(temporary, destination);
-                    return;
                 }
-                catch (Exception error)
-                {
-                    DeleteFile(temporary);
-                    errors.Add(new Uri(url).Host + ": " + InnermostMessage(error));
-                }
+                FinishFile();
             }
-            throw new InvalidOperationException("所有 CDN 节点均失败：" + String.Join("；", errors.ToArray()));
+            catch
+            {
+                AbortFile();
+                throw;
+            }
         }
 
         private static void WriteTextAtomic(string destination, string content)
@@ -378,6 +430,22 @@ namespace BilibiliArchiveHelper
                 {
                     string candidate = Path.Combine(directory, "bin", name);
                     if (File.Exists(candidate)) return candidate;
+                }
+            }
+            catch { }
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string wingetLink = Path.Combine(localAppData, "Microsoft", "WinGet", "Links", name);
+            if (File.Exists(wingetLink)) return wingetLink;
+            try
+            {
+                string packages = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages");
+                if (Directory.Exists(packages))
+                {
+                    foreach (string directory in Directory.GetDirectories(packages, "Gyan.FFmpeg*"))
+                    {
+                        string[] matches = Directory.GetFiles(directory, name, SearchOption.AllDirectories);
+                        if (matches.Length > 0) return matches[0];
+                    }
                 }
             }
             catch { }

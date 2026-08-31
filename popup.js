@@ -11,14 +11,12 @@ import {
   historySegmentUrl,
   selectMedia,
   historyMonths,
-  mergeInstructions,
 } from "./lib/bilibili.js";
 import {
   base64ToBytes,
   parseProtobufDanmaku,
   parseLegacyXml,
   mergeDanmaku,
-  toBilibiliXml,
   toAss,
 } from "./lib/danmaku.js";
 import { buildContext, sanitizeFilename, toVideoNfo, toEpisodeNfo } from "./lib/metadata.js";
@@ -277,7 +275,7 @@ async function startDownload() {
     if (!analyzed) await analyzePage();
     if (!analyzed) throw new Error("页面尚未成功识别");
 
-    const { page, videoPayload, seasonPayload, tagsPayload, context } = analyzed;
+    const { page, seasonPayload, context } = analyzed;
     const requestedQuality = Number(elements.quality.value);
     const playPayload = await apiJson(playUrl(context, requestedQuality));
     const mediaSelection = fillMediaDimensions(selectMedia(playPayload, requestedQuality, context.baseName), context);
@@ -288,32 +286,21 @@ async function startDownload() {
 
     if (elements.includeMetadata.checked) {
       progress(10, "生成元数据");
-      queue.push(textItem(folderFilename(folder, `${context.baseName}_视频信息.json`), `${JSON.stringify(videoPayload, null, 2)}\n`, "application/json;charset=utf-8"));
-      if (seasonPayload) queue.push(textItem(folderFilename(folder, `${context.baseName}_剧集信息.json`), `${JSON.stringify(seasonPayload, null, 2)}\n`, "application/json;charset=utf-8"));
-      if (tagsPayload) queue.push(textItem(folderFilename(folder, `${context.baseName}_标签信息.json`), `${JSON.stringify(tagsPayload, null, 2)}\n`, "application/json;charset=utf-8"));
       const videoNfo = toVideoNfo(context, mediaSelection.media);
       const episodeNfo = seasonPayload ? toEpisodeNfo(context, mediaSelection.media) : videoNfo;
-      queue.push(textItem(folderFilename(folder, `${context.baseName}_视频信息.nfo`), videoNfo, "application/xml;charset=utf-8"));
-      if (seasonPayload) queue.push(textItem(folderFilename(folder, `${context.baseName}_剧集信息.nfo`), episodeNfo, "application/xml;charset=utf-8"));
       queue.push(textItem(folderFilename(folder, `${mediaStem}.nfo`), episodeNfo, "application/xml;charset=utf-8"));
-      log("已生成 JSON 与 NFO");
+      log("已生成同名 NFO");
     }
 
     if (elements.includeDanmaku.checked) {
       const comments = await collectDanmaku(context, elements.historyMode.value);
       const width = mediaSelection.media.width || context.episode?.dimension?.width || context.pageInfo?.dimension?.width || 1280;
       const height = mediaSelection.media.height || context.episode?.dimension?.height || context.pageInfo?.dimension?.height || 720;
-      const xml = toBilibiliXml(comments, context.cid);
       const ass = toAss(comments, { width, height, durationSeconds: context.durationSeconds, title: `${context.showTitle} ${context.title}` });
-      queue.push(textItem(folderFilename(folder, `${context.baseName}_弹幕.xml`), xml, "application/xml;charset=utf-8"));
-      queue.push(textItem(folderFilename(folder, `${context.baseName}_弹幕.ass`), ass, "text/x-ssa;charset=utf-8"));
       queue.push(textItem(folderFilename(folder, `${mediaStem}.ass`), ass, "text/x-ssa;charset=utf-8"));
       if (comments.length) log(`合并后弹幕：${comments.length} 条`);
-      else log("该 CID 当前没有普通弹幕，仍会生成合法的空 XML/ASS，不阻塞视频保存");
+      else log("该 CID 当前没有普通弹幕，仍会生成合法的空 ASS，不阻塞视频保存");
     }
-
-    const instructions = mergeInstructions(context.baseName, mediaSelection);
-    if (instructions) queue.push(textItem(folderFilename(folder, `${mediaStem}_合并说明.txt`), instructions, "text/plain;charset=utf-8"));
 
     let merge = null;
     if (elements.includeVideo.checked) {
@@ -325,7 +312,7 @@ async function startDownload() {
           videoFilename: folderFilename(folder, mediaSelection.items[0].filename),
           audioFilename: folderFilename(folder, mediaSelection.items[1].filename),
           outputFilename: folderFilename(folder, `${mediaStem}.mp4`),
-          keepSources: true,
+          keepSources: false,
         };
       }
       log(mediaSelection.type === "dash" ? "最高画质为 DASH，将先视频、后音频串行下载" : "视频将作为队列最后一项下载");
@@ -345,7 +332,7 @@ async function startDownload() {
     await chrome.storage.local.set({ pendingDownloadJob: job });
     await chrome.tabs.create({ url: chrome.runtime.getURL(`manager.html?job=${encodeURIComponent(job.id)}`) });
     progress(100, "等待选择目录");
-    log(`保存页面已打开：${queue.length} 个文件。只需选择一次目录。`);
+    log(`保存页面已打开：${queue.length} 个写入步骤。只需选择一次目录。`);
     window.close();
   } catch (error) {
     progress(0, "失败");

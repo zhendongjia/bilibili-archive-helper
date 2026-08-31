@@ -87,7 +87,7 @@ if (ugcNfo.includes("<genre>音乐</genre>") || ugcNfo.includes("<genre>晚会</
 const emptyXml = toBilibiliXml([], 38255528603);
 const emptyAss = toAss([], { width: 1280, height: 720, durationSeconds: 5061, title: "No comments" });
 if (!emptyXml.includes("<maxlimit>0</maxlimit>") || !emptyAss.includes("[Events]")) {
-  throw new Error("Zero-comment videos must still produce valid XML and ASS sidecars");
+  throw new Error("Zero-comment videos must still produce valid XML and ASS conversion results");
 }
 const configurationOnlySegment = "IgQAwPwVKrgBCOHUAxKxAXsiZmlsbF9jb2xvciI6Imh0dHA6Ly9pMC5oZHNsYi5jb20vYmZzL2RtLzlkY2QzMjllNjE3MDM1YjQ1ZDIwNDFhYzg4OWM0OWNiNWVkZDNlNDQucG5nIiwic3Ryb2tlX2NvbG9yIjoiaHR0cDovL2kwLmhkc2xiLmNvbS9iZnMvZG0vNzE2YTc0OWIyNDYxZTAyZGYwYjRkYWZiNTliYmFmMGNlYWI3OWRhOS5wbmcifQ==";
 if (parseProtobufDanmaku(base64ToBytes(configurationOnlySegment)).length !== 0) {
@@ -95,16 +95,34 @@ if (parseProtobufDanmaku(base64ToBytes(configurationOnlySegment)).length !== 0) 
 }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(here, "..", "manifest.json"), "utf8"));
-if (manifest.version !== "0.4.0" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
+if (manifest.version !== "0.5.0" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
   throw new Error("Native merge manifest configuration is incomplete");
 }
 const managerSource = fs.readFileSync(path.join(here, "..", "manager.js"), "utf8");
 const popupSource = fs.readFileSync(path.join(here, "..", "popup.js"), "utf8");
-for (const expected of ["com.bilibili_archive_helper.native", "saveAndMerge", "connectNative"]) {
+for (const expected of ["com.bilibili_archive_helper.native", "startJob", "writeChunk", "connectNative"]) {
   if (!managerSource.includes(expected)) throw new Error(`Manager missing native merge token: ${expected}`);
 }
-for (const expected of ["outputFilename", "keepSources: true", "autoMerge.checked"]) {
+for (const expected of ["outputFilename", "keepSources: false", "autoMerge.checked", "`${mediaStem}.ass`", "`${mediaStem}.nfo`"]) {
   if (!popupSource.includes(expected)) throw new Error(`Popup missing merge job token: ${expected}`);
+}
+for (const removedOutput of ["_视频信息.json", "_剧集信息.json", "_标签信息.json", "_弹幕.xml", "_合并说明.txt"]) {
+  if (popupSource.includes(removedOutput)) throw new Error(`Popup still emits intermediate output: ${removedOutput}`);
+}
+const windowsHostSource = fs.readFileSync(path.join(here, "..", "native-host", "BilibiliArchiveNativeHost.cs"), "utf8");
+const unixHostSource = fs.readFileSync(path.join(here, "..", "native-host", "bilibili_archive_native_host.py"), "utf8");
+for (const forbiddenNetworkClient of ["HttpClient", "urllib.request", "urlopen("]) {
+  if (windowsHostSource.includes(forbiddenNetworkClient) || unixHostSource.includes(forbiddenNetworkClient)) {
+    throw new Error(`Native host must not perform network requests: ${forbiddenNetworkClient}`);
+  }
+}
+if (!managerSource.includes("openMediaResponse") || !managerSource.includes("writeChunk")) {
+  throw new Error("Chrome must fetch media and stream chunks to the native host");
+}
+for (const crossPlatformFile of ["bilibili_archive_native_host.py", "install-unix.sh", "uninstall-unix.sh"]) {
+  if (!fs.existsSync(path.join(here, "..", "native-host", crossPlatformFile))) {
+    throw new Error(`Cross-platform native host file is missing: ${crossPlatformFile}`);
+  }
 }
 
 console.log(JSON.stringify({

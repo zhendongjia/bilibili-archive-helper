@@ -13,6 +13,7 @@ const NATIVE_HOST = "com.bilibili_archive_helper.native";
 let job = null;
 let abortController = null;
 let nativePort = null;
+let nativePending = null;
 let nativeAvailable = false;
 let logLines = [];
 
@@ -175,40 +176,96 @@ function sendNativeMessage(message) {
   });
 }
 
-function runNativeJob() {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    nativePort = chrome.runtime.connectNative(NATIVE_HOST);
-    nativePort.onMessage.addListener((message) => {
-      if (!message || typeof message !== "object") return;
-      if (message.type === "selected") {
-        log(`保存目录：${message.path}`);
-      } else if (message.type === "progress") {
-        progress(Number(message.percent || 0), message.label || "本地助手处理中");
-        if (message.message) log(message.message);
-      } else if (message.type === "completed") {
-        settled = true;
-        progress(100, "保存及合并完成");
-        log(`MP4 已生成：${message.outputFilename || job.merge.outputFilename}`);
-        resolve(message);
-        nativePort?.disconnect();
-      } else if (message.type === "cancelled") {
-        settled = true;
-        reject(new DOMException("已取消目录选择", "AbortError"));
-        nativePort?.disconnect();
-      } else if (message.type === "error") {
-        settled = true;
-        reject(new Error(message.message || "本地助手执行失败"));
-        nativePort?.disconnect();
-      }
-    });
-    nativePort.onDisconnect.addListener(() => {
-      const error = chrome.runtime.lastError;
-      nativePort = null;
-      if (!settled) reject(new Error(error?.message || "本地助手连接已断开"));
-    });
-    nativePort.postMessage({ action: "saveAndMerge", job });
+function bytesToBase64(bytes) {
+  let raw = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    raw += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(raw);
+}
+
+function connectNativeSession() {
+  nativePort = chrome.runtime.connectNative(NATIVE_HOST);
+  nativePort.onMessage.addListener((message) => {
+    if (!nativePending || !message || typeof message !== "object") return;
+    const pending = nativePending;
+    nativePending = null;
+    if (message.type === "error") pending.reject(new Error(message.message || "本地助手执行失败"));
+    else if (message.type === "cancelled") pending.reject(new DOMException("已取消目录选择", "AbortError"));
+    else pending.resolve(message);
   });
+  nativePort.onDisconnect.addListener(() => {
+    const error = chrome.runtime.lastError;
+    const pending = nativePending;
+    nativePending = null;
+    nativePort = null;
+    if (pending) pending.reject(new Error(error?.message || "本地助手连接已断开"));
+  });
+}
+
+function nativeCommand(message) {
+  if (!nativePort) throw new Error("本地助手尚未连接");
+  if (nativePending) throw new Error("本地助手命令发生重叠");
+  return new Promise((resolve, reject) => {
+    nativePending = { resolve, reject };
+    nativePort.postMessage(message);
+  });
+}
+
+async function runNativeJob() {
+  abortController = new AbortController();
+  connectNativeSession();
+  try {
+    const selected = await nativeCommand({ action: "startJob", merge: job.merge });
+    log(`保存目录：${selected.path}`);
+    log("媒体请求由 Chrome 发起，将遵循 Chrome/SwitchyOmega 的当前代理规则。");
+
+    for (let index = 0; index < job.items.length; index += 1) {
+      const item = job.items[index];
+      const basePercent = index / job.items.length * 90;
+      const itemWeight = 90 / job.items.length;
+      progress(basePercent, `${index + 1}/${job.items.length} · ${item.filename}`);
+      log(`保存：${item.filename}`);
+      if (item.kind === "text") {
+        await nativeCommand({ action: "writeText", filename: item.filename, content: item.content || "" });
+        continue;
+      }
+
+      const response = await openMediaResponse(item, abortController.signal);
+      const total = Number(response.headers.get("content-length") || 0);
+      const reader = response.body.getReader();
+      let written = 0;
+      await nativeCommand({ action: "startFile", filename: item.filename });
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (abortController.signal.aborted) throw new DOMException("已停止", "AbortError");
+          await nativeCommand({ action: "writeChunk", data: bytesToBase64(value) });
+          written += value.byteLength;
+          const fraction = total > 0 ? written / total : 0;
+          progress(basePercent + itemWeight * Math.min(1, fraction), `${index + 1}/${job.items.length} · ${formatBytes(written)}${total ? ` / ${formatBytes(total)}` : ""}`);
+        }
+        await nativeCommand({ action: "finishFile" });
+      } catch (error) {
+        await reader.cancel().catch(() => {});
+        await nativeCommand({ action: "abortFile" }).catch(() => {});
+        throw error;
+      }
+      log(`媒体完成：${formatBytes(written)}`);
+    }
+
+    progress(92, "FFmpeg 无损封装");
+    log("开始自动合并并校验音视频流……");
+    const completed = await nativeCommand({ action: "merge" });
+    progress(100, "保存及合并完成");
+    log(`MP4 已生成：${completed.outputFilename || job.merge.outputFilename}`);
+    return completed;
+  } finally {
+    nativePort?.disconnect();
+    nativePort = null;
+    nativePending = null;
+  }
 }
 
 async function start() {
@@ -225,7 +282,7 @@ async function start() {
   } catch (error) {
     if (error?.name === "AbortError") {
       progress(0, "已停止");
-      log("任务已停止，未完成的文件已删除。");
+      log("任务已停止，未完成的 .part 临时文件已清理；已完整写入的中间流会保留以避免数据丢失。");
     } else {
       progress(0, "保存失败");
       log(`错误：${error.message || error}`);
@@ -261,7 +318,7 @@ elements.cancel.addEventListener("click", () => {
     return;
   }
   elements.title.textContent = job.title;
-  elements.meta.textContent = `${job.quality} · ${job.items.length} 个文件 · 所有网络请求串行执行`;
+  elements.meta.textContent = `${job.quality} · ${job.items.length} 个写入步骤${job.merge ? " · 成功后保留 MP4 + ASS + NFO" : ""} · 所有网络请求串行执行`;
   if (job.merge) {
     try {
       const status = await sendNativeMessage({ action: "ping" });
@@ -272,12 +329,12 @@ elements.cancel.addEventListener("click", () => {
       log(`本地合并助手已就绪：${status.ffmpegPath}`);
     } catch (error) {
       nativeAvailable = false;
-      elements.start.textContent = "选择目录并保存（暂不自动合并）";
+      elements.start.textContent = "需要安装或修复本地合并助手";
       log(`未连接本地合并助手：${error.message || error}`);
-      log("将使用浏览器保存原始双流；安装 native-host/install.ps1 后可自动合并。");
+      log("请运行 native-host 目录内与当前系统对应的安装脚本；脚本会检测 FFmpeg 并提供安装指导。");
     }
   }
-  elements.start.disabled = false;
+  elements.start.disabled = Boolean(job.merge && !nativeAvailable);
   if (!job.merge) logLines = [];
   log("任务已就绪，请选择一次保存目录。媒体链接有时效，建议立即开始。");
 })();

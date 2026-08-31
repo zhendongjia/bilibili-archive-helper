@@ -1,11 +1,58 @@
 [CmdletBinding()]
-param()
+param([switch]$InstallFfmpeg)
 
 $ErrorActionPreference = 'Stop'
 
+function Find-Ffmpeg {
+    $command = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return $command.Source }
+    foreach ($candidate in @(
+        'C:\Program Files\ffmpeg-9.0-full_build\bin\ffmpeg.exe',
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\ffmpeg.exe')
+    )) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    $packages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path -LiteralPath $packages) {
+        $match = Get-ChildItem -LiteralPath $packages -Directory -Filter 'Gyan.FFmpeg*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter 'ffmpeg.exe' -ErrorAction SilentlyContinue } |
+            Select-Object -First 1
+        if ($match) { return $match.FullName }
+    }
+    return $null
+}
+
+function Install-FfmpegIfRequested {
+    param([bool]$Force)
+    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $winget) {
+        Write-Warning 'FFmpeg was not found and WinGet is unavailable.'
+        Write-Host 'Install FFmpeg from https://ffmpeg.org/download.html and add ffmpeg to PATH.'
+        return
+    }
+    $approved = $Force
+    if (-not $approved) {
+        $answer = Read-Host 'FFmpeg was not found. Install Gyan.FFmpeg with WinGet now? [Y/n]'
+        $approved = [string]::IsNullOrWhiteSpace($answer) -or $answer.Trim().StartsWith('y', [StringComparison]::OrdinalIgnoreCase)
+    }
+    if (-not $approved) {
+        Write-Host 'Skipped FFmpeg installation.'
+        Write-Host 'Later you can run: winget install --id Gyan.FFmpeg --exact --source winget'
+        return
+    }
+    Write-Host 'Installing Gyan.FFmpeg with WinGet...'
+    & $winget.Source install --id Gyan.FFmpeg --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "WinGet failed with exit code $LASTEXITCODE."
+        Write-Host 'Retry manually: winget install --id Gyan.FFmpeg --exact --source winget'
+    }
+}
+
 if ($PSVersionTable.PSEdition -eq 'Core') {
     $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if ($InstallFfmpeg) { $arguments += '-InstallFfmpeg' }
+    & $windowsPowerShell @arguments
     exit $LASTEXITCODE
 }
 
@@ -60,26 +107,29 @@ $hostManifestJson = $hostManifest | ConvertTo-Json -Depth 4
 
 foreach ($registryPath in @(
     'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.bilibili_archive_helper.native',
-    'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.bilibili_archive_helper.native'
+    'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.bilibili_archive_helper.native',
+    'HKCU:\Software\Chromium\NativeMessagingHosts\com.bilibili_archive_helper.native',
+    'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.bilibili_archive_helper.native'
 )) {
     New-Item -Path $registryPath -Force | Out-Null
     Set-Item -Path $registryPath -Value $hostManifestPath
 }
 
-$ffmpeg = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $ffmpeg) {
-    $known = 'C:\Program Files\ffmpeg-9.0-full_build\bin\ffmpeg.exe'
-    if (Test-Path -LiteralPath $known) { $ffmpeg = Get-Item -LiteralPath $known }
+$ffmpegPath = Find-Ffmpeg
+if (-not $ffmpegPath) {
+    Install-FfmpegIfRequested -Force ([bool]$InstallFfmpeg)
+    $ffmpegPath = Find-Ffmpeg
 }
 
 Write-Host ''
 Write-Host 'Bilibili Archive Helper native host installed successfully.' -ForegroundColor Green
 Write-Host "Extension ID: $extensionId"
 Write-Host "Native host: $hostExe"
-$ffmpegPath = if ($ffmpeg) {
-    if ($ffmpeg.Source) { $ffmpeg.Source } else { $ffmpeg.FullName }
+Write-Host 'Network access: none (all media requests remain in Chrome)'
+if ($ffmpegPath) {
+    Write-Host "FFmpeg: $ffmpegPath"
 } else {
-    'Not found; install FFmpeg and add it to PATH'
+    Write-Warning 'FFmpeg is still missing. Automatic MP4 merging will remain disabled.'
+    Write-Host 'Install guide: https://ffmpeg.org/download.html'
 }
-Write-Host "FFmpeg: $ffmpegPath"
 Write-Host 'Reload the extension at chrome://extensions/ and reopen the save page.'

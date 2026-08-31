@@ -5,7 +5,9 @@ $ErrorActionPreference = 'Stop'
 $installRoot = Join-Path $env:LOCALAPPDATA 'BilibiliArchiveHelper\NativeHost'
 foreach ($registryPath in @(
     'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.bilibili_archive_helper.native',
-    'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.bilibili_archive_helper.native'
+    'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.bilibili_archive_helper.native',
+    'HKCU:\Software\Chromium\NativeMessagingHosts\com.bilibili_archive_helper.native',
+    'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.bilibili_archive_helper.native'
 )) {
     if (Test-Path -LiteralPath $registryPath) { Remove-Item -LiteralPath $registryPath -Recurse -Force }
 }
