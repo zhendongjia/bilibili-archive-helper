@@ -5,9 +5,11 @@
 - 当前账号可访问的最高画质视频；
 - 旧 XML、当前 protobuf 分段和可选历史快照合并后的弹幕；
 - 保留滚动、顶部、底部、颜色和字号的 ASS 字幕；
-- Bilibili 原始视频/剧集 JSON；
+- Bilibili 原始视频、剧集和标签 JSON；
 - Kodi、Emby、Jellyfin 可读取的电影与剧集 NFO；
 - 与媒体文件同名的 `.ass` 和 `.nfo` 旁挂文件。
+
+NFO 会尽可能保留网页接口可可靠取得的信息，包括分P/剧集关系、排序标题、UP 主 UID 与头像、封面与 fanart、发布日期、时长、播放/弹幕/评论/收藏/投币/分享/点赞统计、BVID/AID/CID/EPID、画质和编码代码、标签、版权权限以及音视频流参数。除 Kodi/Emby/Jellyfin 通用字段外，原始站点字段会写入 `<bilibili>` 扩展块。
 
 ## 安装
 

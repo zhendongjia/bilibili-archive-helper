@@ -2,6 +2,7 @@ import {
   inspectPageInMainWorld,
   fetchInMainWorld,
   videoInfoUrl,
+  videoTagsUrl,
   seasonInfoUrl,
   playUrl,
   legacyDanmakuUrl,
@@ -146,14 +147,24 @@ async function analyzePage() {
     const infoUrl = videoInfoUrl(page);
     if (!infoUrl) throw new Error("无法构造视频信息接口");
     const videoPayload = await apiJson(infoUrl);
-    const context = buildContext(page, videoPayload, seasonPayload);
+    let tagsPayload = null;
+    const tagUrl = videoTagsUrl(page);
+    if (tagUrl) {
+      try {
+        await politeDelay();
+        tagsPayload = await apiJson(tagUrl);
+      } catch (error) {
+        log(`标签接口失败：${error.message || error}`);
+      }
+    }
+    const context = buildContext(page, videoPayload, seasonPayload, tagsPayload);
     if (!context.cid || !context.aid) throw new Error("视频信息缺少 CID 或 AID");
 
     const requestedQuality = Number(elements.quality.value);
     await politeDelay();
     const playPayload = await apiJson(playUrl(context, requestedQuality));
     const media = selectMedia(playPayload, requestedQuality, context.baseName);
-    analyzed = { page, videoPayload, seasonPayload, context, media };
+    analyzed = { page, videoPayload, seasonPayload, tagsPayload, context, media };
 
     elements.pageTitle.textContent = `${context.showTitle} · ${context.title}`;
     elements.pageMeta.textContent = `${context.bvid || `av${context.aid}`} · CID ${context.cid} · ${Math.round(context.durationSeconds / 60)} 分钟 · ${media.label} · ${media.type === "dash" ? "DASH 双流" : "单文件"}`;
@@ -265,7 +276,7 @@ async function startDownload() {
     if (!analyzed) await analyzePage();
     if (!analyzed) throw new Error("页面尚未成功识别");
 
-    const { page, videoPayload, seasonPayload, context } = analyzed;
+    const { page, videoPayload, seasonPayload, tagsPayload, context } = analyzed;
     const requestedQuality = Number(elements.quality.value);
     const playPayload = await apiJson(playUrl(context, requestedQuality));
     const mediaSelection = fillMediaDimensions(selectMedia(playPayload, requestedQuality, context.baseName), context);
@@ -278,6 +289,7 @@ async function startDownload() {
       progress(10, "生成元数据");
       queue.push(textItem(folderFilename(folder, `${context.baseName}_视频信息.json`), `${JSON.stringify(videoPayload, null, 2)}\n`, "application/json;charset=utf-8"));
       if (seasonPayload) queue.push(textItem(folderFilename(folder, `${context.baseName}_剧集信息.json`), `${JSON.stringify(seasonPayload, null, 2)}\n`, "application/json;charset=utf-8"));
+      if (tagsPayload) queue.push(textItem(folderFilename(folder, `${context.baseName}_标签信息.json`), `${JSON.stringify(tagsPayload, null, 2)}\n`, "application/json;charset=utf-8"));
       const videoNfo = toVideoNfo(context, mediaSelection.media);
       const episodeNfo = seasonPayload ? toEpisodeNfo(context, mediaSelection.media) : videoNfo;
       queue.push(textItem(folderFilename(folder, `${context.baseName}_视频信息.nfo`), videoNfo, "application/xml;charset=utf-8"));

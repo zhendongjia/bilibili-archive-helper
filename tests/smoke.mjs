@@ -47,6 +47,43 @@ if (fallbackMedia.items[0].urls.length !== 2 || fallbackMedia.items[1].urls.leng
   throw new Error("Media items must retain primary and backup CDN URLs");
 }
 
+const ugcPage = { url: "https://www.bilibili.com/video/BV1QVQRYVE96", title: "LLM", bvid: "BV1QVQRYVE96", aid: 114187963466676, cid: 38255528603, epId: 0 };
+const ugcPayload = { code: 0, data: {
+  bvid: ugcPage.bvid, aid: ugcPage.aid, videos: 32, tid: 231, tid_v2: 2096, copyright: 1,
+  pic: "http://i0.hdslb.com/cover.jpg", title: "李宏毅LLM大模型课程", pubdate: 1742370680, ctime: 1742370680, desc: "。", duration: 5061,
+  owner: { mid: 3546866876680925, name: "李宏毅-机器学习", face: "https://i2.hdslb.com/avatar.jpg" },
+  stat: { view: 25250, danmaku: 1, reply: 139, favorite: 1097, coin: 162, share: 95, like: 256 },
+  rights: { download: 1, pay: 0, no_reprint: 0 },
+  pages: [{ cid: ugcPage.cid, page: 1, part: "第1节：第一讲", duration: 5061, first_frame: "http://i2.hdslb.com/frame.jpg", ctime: 1778487022 }],
+} };
+const ugcTags = { code: 0, data: [{ tag_id: 46183, tag_name: "人工智能" }, { tag_id: 54148, tag_name: "AI" }] };
+const ugcContext = buildContext(ugcPage, ugcPayload, null, ugcTags);
+const ugcNfo = toVideoNfo(ugcContext, {
+  width: 1280, height: 720, videoCodec: "h264", audioCodec: "aac", audioChannels: 2,
+  qualityCode: 64, qualityLabel: "高清 720P", videoCodecid: 7, videoBandwidth: 101861, audioId: 30232, audioBandwidth: 66146, frameRate: "30",
+});
+for (const expected of [
+  "<sorttitle>20250319 - 01 - 第1节：第一讲</sorttitle>",
+  "<runtime>85</runtime>",
+  '<uniqueid type="bilibili" default="true">BV1QVQRYVE96</uniqueid>',
+  "<viewcount>25250</viewcount>",
+  "<replycount>139</replycount>",
+  "<qualitycode>64</qualitycode>",
+  "<codecid>7</codecid>",
+  "<videowidth>1280</videowidth>",
+  "<videobandwidth>101861</videobandwidth>",
+  "<audiobandwidth>66146</audiobandwidth>",
+  "<durationseconds>5061</durationseconds>",
+  '<tag id="46183">人工智能</tag>',
+  "<role>UP主</role>",
+  "<download>1</download>",
+]) {
+  if (!ugcNfo.includes(expected)) throw new Error(`Rich UGC NFO missing: ${expected}`);
+}
+if (ugcNfo.includes("<genre>音乐</genre>") || ugcNfo.includes("<genre>晚会</genre>")) {
+  throw new Error("UGC NFO must not contain hard-coded music/event genres");
+}
+
 const emptyXml = toBilibiliXml([], 38255528603);
 const emptyAss = toAss([], { width: 1280, height: 720, durationSeconds: 5061, title: "No comments" });
 if (!emptyXml.includes("<maxlimit>0</maxlimit>") || !emptyAss.includes("[Events]")) {
