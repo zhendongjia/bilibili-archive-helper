@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Bilibili Archive Helper",
+  "version": "0.1.0",
+  "description": "串行保存当前 Bilibili 视频、弹幕、ASS 字幕、JSON 元数据和 NFO。",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage",
+    "unlimitedStorage",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "https://*.bilibili.com/*",
+    "https://*.hdslb.com/*",
+    "https://*.bilivideo.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Bilibili Archive Helper",
+    "default_popup": "popup.html"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "bilibili_cdn_headers",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}

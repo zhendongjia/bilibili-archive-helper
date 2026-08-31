@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bilibili Archive Helper</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="mark">BA</div>
+        <div>
+          <h1>Bilibili Archive Helper</h1>
+          <p>当前页面 · 登录态 · 串行下载</p>
+        </div>
+      </header>
+
+      <section class="card summary" aria-live="polite">
+        <div class="eyebrow">当前视频</div>
+        <div id="page-title" class="title">等待识别</div>
+        <div id="page-meta" class="meta">请先打开 Bilibili 视频或番剧播放页。</div>
+      </section>
+
+      <section class="card controls">
+        <label>
+          <span>画质</span>
+          <select id="quality">
+            <option value="127">最高可用</option>
+            <option value="80">1080P</option>
+            <option value="64">720P</option>
+            <option value="32">480P</option>
+          </select>
+        </label>
+
+        <label>
+          <span>历史弹幕</span>
+          <select id="history-mode">
+            <option value="enhanced">增强补全（推荐）</option>
+            <option value="current">当前接口合并</option>
+            <option value="monthly">逐月快照（很慢）</option>
+          </select>
+        </label>
+
+        <div class="checks">
+          <label><input id="include-video" type="checkbox" checked> 视频</label>
+          <label><input id="include-danmaku" type="checkbox" checked> XML + ASS</label>
+          <label><input id="include-metadata" type="checkbox" checked> JSON + NFO</label>
+        </div>
+
+        <button id="analyze" class="secondary" type="button">重新识别</button>
+        <button id="download" class="primary" type="button" disabled>开始串行下载</button>
+      </section>
+
+      <section class="card progress-card">
+        <div class="progress-head">
+          <span>进度</span>
+          <span id="progress-label">空闲</span>
+        </div>
+        <div class="progress"><div id="progress-bar"></div></div>
+        <pre id="log">未开始。</pre>
+      </section>
+
+      <footer>
+        不绕过付费墙或 DRM；不读取、导出 Cookie；不修改代理设置。
+      </footer>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
