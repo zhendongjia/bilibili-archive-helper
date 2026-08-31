@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import json
+import locale
 import os
 from pathlib import Path
 import shutil
@@ -19,13 +20,19 @@ import traceback
 from typing import Any, BinaryIO, Dict, List, Optional
 
 
-HOST_VERSION = "0.5.0"
+HOST_VERSION = "0.5.1"
 MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 session_root: Optional[Path] = None
 session_merge: Optional[Dict[str, Any]] = None
 current_file: Optional[BinaryIO] = None
 current_final: Optional[Path] = None
 current_temporary: Optional[Path] = None
+
+locale_name = (locale.getlocale()[0] or os.environ.get("LANG", "en")).lower()
+
+
+def tr(english: str, chinese: str) -> str:
+    return chinese if locale_name.startswith("zh") else english
 
 
 def write_message(message: Dict[str, Any]) -> None:
@@ -101,12 +108,14 @@ def picker_kind() -> Optional[str]:
 def pick_directory() -> Optional[Path]:
     kind = picker_kind()
     if kind == "osascript":
-        script = 'POSIX path of (choose folder with prompt "Choose a folder for Bilibili Archive Helper")'
+        prompt = tr("Choose a folder for Bilibili Archive Helper", "选择 Bilibili Archive Helper 保存目录")
+        script = f'POSIX path of (choose folder with prompt "{prompt}")'
         result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
         value = result.stdout.strip()
         return Path(value).expanduser().resolve() if result.returncode == 0 and value else None
     if kind == "zenity":
-        result = subprocess.run(["zenity", "--file-selection", "--directory", "--title=Choose Bilibili save folder"], capture_output=True, text=True)
+        title = tr("Choose Bilibili save folder", "选择 Bilibili 保存目录")
+        result = subprocess.run(["zenity", "--file-selection", "--directory", f"--title={title}"], capture_output=True, text=True)
         value = result.stdout.strip()
         return Path(value).expanduser().resolve() if result.returncode == 0 and value else None
     if kind == "kdialog":
@@ -121,21 +130,21 @@ def pick_directory() -> Optional[Path]:
         root.withdraw()
         root.attributes("-topmost", True)
         try:
-            value = filedialog.askdirectory(title="Choose Bilibili save folder", mustexist=False)
+            value = filedialog.askdirectory(title=tr("Choose Bilibili save folder", "选择 Bilibili 保存目录"), mustexist=False)
         finally:
             root.destroy()
         return Path(value).expanduser().resolve() if value else None
-    raise RuntimeError("No folder picker is available. Install zenity or kdialog, then rerun the native-host installer.")
+    raise RuntimeError(tr("No folder picker is available. Install zenity or kdialog, then rerun the native-host installer.", "没有可用的目录选择器。请安装 zenity 或 kdialog，然后重新运行本地助手安装脚本。"))
 
 
 def safe_path(root: Path, relative: str) -> Path:
     if not relative or Path(relative).is_absolute():
-        raise ValueError(f"Invalid relative path: {relative}")
+        raise ValueError(tr(f"Invalid relative path: {relative}", f"相对路径无效：{relative}"))
     candidate = (root / relative.replace("\\", "/")).resolve()
     try:
         candidate.relative_to(root)
     except ValueError as error:
-        raise ValueError(f"Path escapes the selected folder: {relative}") from error
+        raise ValueError(tr(f"Path escapes the selected folder: {relative}", f"文件路径超出所选目录：{relative}")) from error
     return candidate
 
 
@@ -179,9 +188,9 @@ def cleanup_session() -> None:
 def start_file(relative: str) -> None:
     global current_file, current_final, current_temporary
     if session_root is None:
-        raise RuntimeError("No active save session")
+        raise RuntimeError(tr("No active save session", "当前没有活动的保存任务"))
     if current_file is not None:
-        raise RuntimeError("The previous media file is still open")
+        raise RuntimeError(tr("The previous media file is still open", "上一个媒体文件尚未完成"))
     current_final = safe_path(session_root, relative)
     current_final.parent.mkdir(parents=True, exist_ok=True)
     current_temporary = Path(str(current_final) + ".part")
@@ -191,16 +200,16 @@ def start_file(relative: str) -> None:
 
 def write_chunk(encoded: str) -> None:
     if current_file is None:
-        raise RuntimeError("No media file is open")
+        raise RuntimeError(tr("No media file is open", "当前没有打开的媒体文件"))
     if not encoded:
-        raise ValueError("Media chunk is empty")
+        raise ValueError(tr("Media chunk is empty", "媒体分块为空"))
     current_file.write(base64.b64decode(encoded, validate=True))
 
 
 def finish_file() -> None:
     global current_file, current_final, current_temporary
     if current_file is None or current_final is None or current_temporary is None:
-        raise RuntimeError("No media file is open")
+        raise RuntimeError(tr("No media file is open", "当前没有打开的媒体文件"))
     current_file.flush()
     os.fsync(current_file.fileno())
     current_file.close()
@@ -233,9 +242,9 @@ def run_checked(arguments: List[str]) -> subprocess.CompletedProcess:
 def merge_and_verify(video: Path, audio: Path, output: Path) -> None:
     ffmpeg = executable("ffmpeg")
     if not ffmpeg:
-        raise FileNotFoundError("FFmpeg was not found. Rerun the native-host installer and follow its installation guidance.")
+        raise FileNotFoundError(tr("FFmpeg was not found. Rerun the native-host installer and follow its installation guidance.", "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。"))
     if not video.is_file() or not audio.is_file():
-        raise FileNotFoundError("The downloaded video or audio stream is missing")
+        raise FileNotFoundError(tr("The downloaded video or audio stream is missing", "已下载的视频流或音频流不存在"))
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary_output = Path(str(output) + ".merging.mp4")
     temporary_output.unlink(missing_ok=True)
@@ -249,12 +258,12 @@ def merge_and_verify(video: Path, audio: Path, output: Path) -> None:
             "-movflags", "+faststart", "-f", "mp4", str(temporary_output),
         ])
         if not temporary_output.is_file() or temporary_output.stat().st_size <= 0:
-            raise RuntimeError("FFmpeg did not create a valid MP4")
+            raise RuntimeError(tr("FFmpeg did not create a valid MP4", "FFmpeg 未生成有效 MP4"))
         ffprobe = executable("ffprobe")
         if ffprobe:
             probe = run_checked([ffprobe, "-v", "error", "-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1", str(temporary_output)]).stdout
             if "codec_type=video" not in probe or "codec_type=audio" not in probe:
-                raise RuntimeError("Merged MP4 does not contain both video and audio streams")
+                raise RuntimeError(tr("Merged MP4 does not contain both video and audio streams", "合并后的 MP4 没有同时包含视频流和音频流"))
         replace_file(temporary_output, output)
     finally:
         temporary_output.unlink(missing_ok=True)
@@ -267,9 +276,9 @@ def merge_and_verify(video: Path, audio: Path, output: Path) -> None:
 def start_session(merge: Optional[Dict[str, Any]]) -> None:
     global session_root, session_merge
     if not isinstance(merge, dict):
-        raise ValueError("Merge configuration is missing")
+        raise ValueError(tr("Merge configuration is missing", "任务缺少合并信息"))
     if not executable("ffmpeg"):
-        raise FileNotFoundError("FFmpeg was not found. Rerun the native-host installer and follow its installation guidance.")
+        raise FileNotFoundError(tr("FFmpeg was not found. Rerun the native-host installer and follow its installation guidance.", "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。"))
     cleanup_session()
     selected = pick_directory()
     if selected is None:
@@ -283,9 +292,9 @@ def start_session(merge: Optional[Dict[str, Any]]) -> None:
 def complete_merge() -> None:
     global session_root, session_merge
     if session_root is None or session_merge is None:
-        raise RuntimeError("No active save session")
+        raise RuntimeError(tr("No active save session", "当前没有活动的保存任务"))
     if current_file is not None:
-        raise RuntimeError("A media file is still being written")
+        raise RuntimeError(tr("A media file is still being written", "媒体文件仍在写入"))
     video = safe_path(session_root, str(session_merge.get("videoFilename", "")))
     audio = safe_path(session_root, str(session_merge.get("audioFilename", "")))
     output_relative = str(session_merge.get("outputFilename", ""))
@@ -307,11 +316,11 @@ def handle(message: Dict[str, Any]) -> None:
         picker = picker_kind()
         ok = bool(ffmpeg and picker)
         if not ffmpeg:
-            detail = "FFmpeg was not found. Rerun the native-host installer to install it."
+            detail = tr("FFmpeg was not found. Rerun the native-host installer to install it.", "未找到 FFmpeg。请重新运行本地助手安装脚本进行安装。")
         elif not picker:
-            detail = "No folder picker was found. Install zenity or kdialog."
+            detail = tr("No folder picker was found. Install zenity or kdialog.", "没有找到目录选择器。请安装 zenity 或 kdialog。")
         else:
-            detail = "Native host is ready"
+            detail = tr("Native host is ready", "本地助手已就绪")
         write_message({
             "type": "ready", "ok": ok, "helperVersion": HOST_VERSION,
             "ffmpegPath": ffmpeg or "", "ffmpegVersion": ffmpeg_version(ffmpeg) if ffmpeg else "",
@@ -322,7 +331,7 @@ def handle(message: Dict[str, Any]) -> None:
         start_session(message.get("merge"))
         return
     if session_root is None:
-        raise RuntimeError("Start a save session first")
+        raise RuntimeError(tr("Start a save session first", "请先启动保存任务"))
     if action == "writeText":
         write_text_atomic(safe_path(session_root, str(message.get("filename", ""))), str(message.get("content", "")))
         write_message({"type": "ack"})
@@ -341,7 +350,7 @@ def handle(message: Dict[str, Any]) -> None:
     elif action == "merge":
         complete_merge()
     else:
-        raise ValueError(f"Unsupported action: {action}")
+        raise ValueError(tr(f"Unsupported action: {action}", f"不支持的操作：{action}"))
 
 
 def protocol_main() -> int:

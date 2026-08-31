@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "Bilibili Archive Helper"
+  },
+  "extensionDescription": {
+    "message": "Serially save and merge the current Bilibili video, with ASS subtitles and NFO metadata."
+  }
+}

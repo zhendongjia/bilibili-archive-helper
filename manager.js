@@ -1,3 +1,7 @@
+import { language, localizeDocument, t } from "./lib/i18n.js";
+
+localizeDocument();
+
 const elements = {
   title: document.querySelector("#job-title"),
   meta: document.querySelector("#job-meta"),
@@ -18,7 +22,7 @@ let nativeAvailable = false;
 let logLines = [];
 
 function log(message) {
-  const timestamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  const timestamp = new Date().toLocaleTimeString(language, { hour12: false });
   logLines.push(`[${timestamp}] ${message}`);
   logLines = logLines.slice(-120);
   elements.log.textContent = logLines.join("\n");
@@ -54,7 +58,7 @@ function safePathParts(filename) {
 
 async function destination(root, filename) {
   const parts = safePathParts(filename);
-  if (!parts.length) throw new Error("文件名为空");
+  if (!parts.length) throw new Error(t("filenameEmpty"));
   let directory = root;
   for (const part of parts.slice(0, -1)) {
     directory = await directory.getDirectoryHandle(part, { create: true });
@@ -85,7 +89,7 @@ async function openMediaResponse(item, signal) {
   for (const url of mediaUrls(item)) {
     const host = new URL(url).host;
     try {
-      log(`连接 CDN：${host}`);
+      log(t("connectingCdn", { host }));
       const response = await fetch(url, {
         credentials: "omit",
         cache: "no-store",
@@ -96,17 +100,17 @@ async function openMediaResponse(item, signal) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (/text\/html|application\/(?:json|xml)/.test(contentType)) {
         await response.body?.cancel();
-        throw new Error(`返回了 ${contentType || "非媒体内容"}`);
+        throw new Error(t("nonMedia", { type: contentType || t("nonMediaFallback") }));
       }
-      if (!response.body) throw new Error("响应没有可读取的数据流");
+      if (!response.body) throw new Error(t("unreadableStream"));
       return response;
     } catch (error) {
       if (signal.aborted) throw error;
       errors.push(`${host}: ${error.message || error}`);
-      log(`节点失败，尝试备用地址：${host}`);
+      log(t("nodeFailed", { host }));
     }
   }
-  throw new Error(errors.join("；") || "没有可用的媒体地址");
+  throw new Error(errors.join("; ") || t("noMediaUrl"));
 }
 
 async function writeMediaFile(root, item, signal, onChunk) {
@@ -121,7 +125,7 @@ async function writeMediaFile(root, item, signal, onChunk) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (signal.aborted) throw new DOMException("已停止", "AbortError");
+      if (signal.aborted) throw new DOMException(t("stopped"), "AbortError");
       await writable.write(value);
       written += value.byteLength;
       onChunk(written, total);
@@ -141,14 +145,14 @@ async function runJob(root) {
   elements.start.disabled = true;
   elements.cancel.disabled = false;
   logLines = [];
-  log(`开始串行保存 ${job.items.length} 个文件`);
+  log(t("startingSerial", { count: job.items.length }));
 
   for (let index = 0; index < job.items.length; index += 1) {
     const item = job.items[index];
     const basePercent = index / job.items.length * 100;
     const itemWeight = 100 / job.items.length;
     progress(basePercent, `${index + 1}/${job.items.length} · ${item.filename}`);
-    log(`保存：${item.filename}`);
+    log(t("saving", { filename: item.filename }));
     if (item.kind === "text") {
       await writeTextFile(root, item);
     } else {
@@ -156,12 +160,12 @@ async function runJob(root) {
         const fraction = total > 0 ? written / total : 0;
         progress(basePercent + itemWeight * Math.min(1, fraction), `${index + 1}/${job.items.length} · ${formatBytes(written)}${total ? ` / ${formatBytes(total)}` : ""}`);
       });
-      log(`媒体完成：${formatBytes(bytes)}`);
+      log(t("mediaComplete", { size: formatBytes(bytes) }));
     }
   }
 
-  progress(100, "全部保存完成");
-  log("全部文件已成功写入所选目录。");
+  progress(100, t("allSaved"));
+  log(t("allWritten"));
   elements.cancel.disabled = true;
   await chrome.storage.local.remove("pendingDownloadJob");
 }
@@ -190,8 +194,8 @@ function connectNativeSession() {
     if (!nativePending || !message || typeof message !== "object") return;
     const pending = nativePending;
     nativePending = null;
-    if (message.type === "error") pending.reject(new Error(message.message || "本地助手执行失败"));
-    else if (message.type === "cancelled") pending.reject(new DOMException("已取消目录选择", "AbortError"));
+    if (message.type === "error") pending.reject(new Error(message.message || t("nativeFailed")));
+    else if (message.type === "cancelled") pending.reject(new DOMException(t("folderCancelled"), "AbortError"));
     else pending.resolve(message);
   });
   nativePort.onDisconnect.addListener(() => {
@@ -199,13 +203,13 @@ function connectNativeSession() {
     const pending = nativePending;
     nativePending = null;
     nativePort = null;
-    if (pending) pending.reject(new Error(error?.message || "本地助手连接已断开"));
+    if (pending) pending.reject(new Error(error?.message || t("nativeDisconnected")));
   });
 }
 
 function nativeCommand(message) {
-  if (!nativePort) throw new Error("本地助手尚未连接");
-  if (nativePending) throw new Error("本地助手命令发生重叠");
+  if (!nativePort) throw new Error(t("nativeNotConnected"));
+  if (nativePending) throw new Error(t("nativeOverlap"));
   return new Promise((resolve, reject) => {
     nativePending = { resolve, reject };
     nativePort.postMessage(message);
@@ -217,15 +221,15 @@ async function runNativeJob() {
   connectNativeSession();
   try {
     const selected = await nativeCommand({ action: "startJob", merge: job.merge });
-    log(`保存目录：${selected.path}`);
-    log("媒体请求由 Chrome 发起，将遵循 Chrome/SwitchyOmega 的当前代理规则。");
+    log(t("selectedFolder", { path: selected.path }));
+    log(t("chromeProxy"));
 
     for (let index = 0; index < job.items.length; index += 1) {
       const item = job.items[index];
       const basePercent = index / job.items.length * 90;
       const itemWeight = 90 / job.items.length;
       progress(basePercent, `${index + 1}/${job.items.length} · ${item.filename}`);
-      log(`保存：${item.filename}`);
+      log(t("saving", { filename: item.filename }));
       if (item.kind === "text") {
         await nativeCommand({ action: "writeText", filename: item.filename, content: item.content || "" });
         continue;
@@ -240,7 +244,7 @@ async function runNativeJob() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          if (abortController.signal.aborted) throw new DOMException("已停止", "AbortError");
+          if (abortController.signal.aborted) throw new DOMException(t("stopped"), "AbortError");
           await nativeCommand({ action: "writeChunk", data: bytesToBase64(value) });
           written += value.byteLength;
           const fraction = total > 0 ? written / total : 0;
@@ -252,14 +256,14 @@ async function runNativeJob() {
         await nativeCommand({ action: "abortFile" }).catch(() => {});
         throw error;
       }
-      log(`媒体完成：${formatBytes(written)}`);
+      log(t("mediaComplete", { size: formatBytes(written) }));
     }
 
-    progress(92, "FFmpeg 无损封装");
-    log("开始自动合并并校验音视频流……");
+    progress(92, t("ffmpegMuxing"));
+    log(t("muxStarting"));
     const completed = await nativeCommand({ action: "merge" });
-    progress(100, "保存及合并完成");
-    log(`MP4 已生成：${completed.outputFilename || job.merge.outputFilename}`);
+    progress(100, t("muxComplete"));
+    log(t("mp4Created", { filename: completed.outputFilename || job.merge.outputFilename }));
     return completed;
   } finally {
     nativePort?.disconnect();
@@ -270,7 +274,7 @@ async function runNativeJob() {
 
 async function start() {
   try {
-    if (!job) throw new Error("没有可执行的保存任务");
+    if (!job) throw new Error(t("noJob"));
     if (job.merge && nativeAvailable) {
       await runNativeJob();
       await chrome.storage.local.remove("pendingDownloadJob");
@@ -281,11 +285,11 @@ async function start() {
     }
   } catch (error) {
     if (error?.name === "AbortError") {
-      progress(0, "已停止");
-      log("任务已停止，未完成的 .part 临时文件已清理；已完整写入的中间流会保留以避免数据丢失。");
+      progress(0, t("stopped"));
+      log(t("taskStopped"));
     } else {
-      progress(0, "保存失败");
-      log(`错误：${error.message || error}`);
+      progress(0, t("saveFailed"));
+      log(t("error", { error: error.message || error }));
     }
     elements.start.disabled = !job;
     elements.cancel.disabled = true;
@@ -303,38 +307,38 @@ elements.cancel.addEventListener("click", () => {
 
 (async () => {
   if (typeof window.showDirectoryPicker !== "function") {
-    elements.title.textContent = "当前浏览器不支持一次性目录保存";
-    elements.meta.textContent = "请使用较新的 Chrome 或 Edge。";
-    log("缺少 File System Access API。请升级浏览器后重试。");
+    elements.title.textContent = t("browserUnsupported");
+    elements.meta.textContent = t("useModernBrowser");
+    log(t("missingFsApi"));
     return;
   }
   const expectedId = new URLSearchParams(location.search).get("job");
   job = (await chrome.storage.local.get("pendingDownloadJob")).pendingDownloadJob || null;
   if (!job || job.id !== expectedId) {
     job = null;
-    elements.title.textContent = "保存任务不存在或已过期";
-    elements.meta.textContent = "请回到 Bilibili 页面，重新点击扩展并准备文件。";
-    log("没有找到与当前页面匹配的任务。");
+    elements.title.textContent = t("jobExpired");
+    elements.meta.textContent = t("reopenExtension");
+    log(t("jobMismatch"));
     return;
   }
   elements.title.textContent = job.title;
-  elements.meta.textContent = `${job.quality} · ${job.items.length} 个写入步骤${job.merge ? " · 成功后保留 MP4 + ASS + NFO" : ""} · 所有网络请求串行执行`;
+  elements.meta.textContent = t("jobMeta", { quality: job.quality, count: job.items.length, result: job.merge ? t("finalThree") : "" });
   if (job.merge) {
     try {
       const status = await sendNativeMessage({ action: "ping" });
-      if (!status?.ok) throw new Error(status?.message || "本地助手未就绪");
+      if (!status?.ok) throw new Error(status?.message || t("nativeNotReady"));
       nativeAvailable = true;
-      elements.start.textContent = "选择目录、保存并自动合并 MP4";
-      elements.meta.textContent += ` · FFmpeg ${status.ffmpegVersion || "已就绪"}`;
-      log(`本地合并助手已就绪：${status.ffmpegPath}`);
+      elements.start.textContent = t("selectSaveMerge");
+      elements.meta.textContent += ` · FFmpeg ${status.ffmpegVersion || t("ready")}`;
+      log(t("nativeReady", { path: status.ffmpegPath }));
     } catch (error) {
       nativeAvailable = false;
-      elements.start.textContent = "需要安装或修复本地合并助手";
-      log(`未连接本地合并助手：${error.message || error}`);
-      log("请运行 native-host 目录内与当前系统对应的安装脚本；脚本会检测 FFmpeg 并提供安装指导。");
+      elements.start.textContent = t("installOrRepair");
+      log(t("nativeUnavailable", { error: error.message || error }));
+      log(t("installGuide"));
     }
   }
   elements.start.disabled = Boolean(job.merge && !nativeAvailable);
   if (!job.merge) logLines = [];
-  log("任务已就绪，请选择一次保存目录。媒体链接有时效，建议立即开始。");
+  log(t("jobReady"));
 })();

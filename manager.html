@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en" data-i18n-title="managerTitle">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Bilibili Archive Helper · 保存文件</title>
+    <title>Bilibili Archive Helper · Save files</title>
     <link rel="stylesheet" href="manager.css">
   </head>
   <body>
@@ -12,33 +12,31 @@
         <div class="mark">BA</div>
         <div>
           <div class="eyebrow">Bilibili Archive Helper</div>
-          <h1>一次选择目录，串行保存全部文件</h1>
+          <h1 data-i18n="managerHeading">Choose once, then save every file serially</h1>
         </div>
       </header>
 
       <section class="card summary" aria-live="polite">
-        <div id="job-title" class="title">正在读取任务……</div>
+        <div id="job-title" class="title" data-i18n="readingJob">Reading the job…</div>
         <div id="job-meta" class="meta"></div>
       </section>
 
       <section class="card actions">
-        <p>浏览器或本地助手会询问一次保存目录。授权后，视频、音频、弹幕和元数据会按顺序写入同名子目录；启用本地助手时会继续无损合并 MP4。</p>
-        <button id="start" class="primary" type="button" disabled>选择目录并开始保存</button>
-        <button id="cancel" class="secondary" type="button" disabled>停止</button>
+        <p data-i18n="managerIntro">Chrome or the local helper asks for one destination folder. Video, audio, subtitles, and metadata are written sequentially; the helper then losslessly merges DASH streams into MP4.</p>
+        <button id="start" class="primary" type="button" disabled data-i18n="selectAndSave">Choose a folder and start saving</button>
+        <button id="cancel" class="secondary" type="button" disabled data-i18n="stop">Stop</button>
       </section>
 
       <section class="card progress-card">
         <div class="progress-head">
-          <span id="progress-label">等待开始</span>
+          <span id="progress-label" data-i18n="waitingStart">Waiting to start</span>
           <span id="progress-percent">0%</span>
         </div>
         <div class="progress"><div id="progress-bar"></div></div>
-        <pre id="log">尚未开始。</pre>
+        <pre id="log" data-i18n="managerNotStarted">Not started.</pre>
       </section>
 
-      <footer>
-        CDN 节点失败时会自动尝试备用地址；网络请求保持串行并遵循 Chrome/SwitchyOmega 当前规则。
-      </footer>
+      <footer data-i18n="managerFooter">Failed CDN nodes are retried serially; requests follow the current Chrome/SwitchyOmega rules.</footer>
     </main>
     <script type="module" src="manager.js"></script>
   </body>

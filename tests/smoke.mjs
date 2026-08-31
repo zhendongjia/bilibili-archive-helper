@@ -58,6 +58,9 @@ const ugcPayload = { code: 0, data: {
 } };
 const ugcTags = { code: 0, data: [{ tag_id: 46183, tag_name: "人工智能" }, { tag_id: 54148, tag_name: "AI" }] };
 const ugcContext = buildContext(ugcPage, ugcPayload, null, ugcTags);
+if (!/^Bilibili_BV1QVQRYVE96_P01$/.test(ugcContext.baseName) || /[^\x00-\x7F]/.test(ugcContext.baseName)) {
+  throw new Error(`Archive base name must be stable ASCII: ${ugcContext.baseName}`);
+}
 const ugcNfo = toVideoNfo(ugcContext, {
   width: 1280, height: 720, videoCodec: "h264", audioCodec: "aac", audioChannels: 2,
   qualityCode: 64, qualityLabel: "高清 720P", videoCodecid: 7, videoBandwidth: 101861, audioId: 30232, audioBandwidth: 66146, frameRate: "30",
@@ -95,7 +98,7 @@ if (parseProtobufDanmaku(base64ToBytes(configurationOnlySegment)).length !== 0) 
 }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(here, "..", "manifest.json"), "utf8"));
-if (manifest.version !== "0.5.0" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
+if (manifest.version !== "0.5.1" || manifest.default_locale !== "en" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
   throw new Error("Native merge manifest configuration is incomplete");
 }
 const managerSource = fs.readFileSync(path.join(here, "..", "manager.js"), "utf8");
@@ -123,6 +126,53 @@ for (const crossPlatformFile of ["bilibili_archive_native_host.py", "install-uni
   if (!fs.existsSync(path.join(here, "..", "native-host", crossPlatformFile))) {
     throw new Error(`Cross-platform native host file is missing: ${crossPlatformFile}`);
   }
+}
+if (!fs.existsSync(path.join(here, "..", "install-native-host.cmd"))) {
+  throw new Error("English-named Windows installer entry point is missing");
+}
+function assertAsciiFilenames(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if ([".git", "_metadata", "__pycache__"].includes(entry.name)) continue;
+    if (/[^\x00-\x7F]/.test(entry.name)) throw new Error(`Non-ASCII filename remains: ${entry.name}`);
+    if (entry.isDirectory()) assertAsciiFilenames(path.join(directory, entry.name));
+  }
+}
+assertAsciiFilenames(path.join(here, ".."));
+
+const englishReadme = fs.readFileSync(path.join(here, "..", "README.md"), "utf8");
+const chineseReadme = fs.readFileSync(path.join(here, "..", "README.zh-CN.md"), "utf8");
+if (!englishReadme.includes("[Simplified Chinese](README.zh-CN.md)") || !chineseReadme.includes("[English](README.md)")) {
+  throw new Error("English and Chinese documentation must link to each other");
+}
+for (const localeName of ["en", "zh_CN"]) {
+  const localeMessages = JSON.parse(fs.readFileSync(path.join(here, "..", "_locales", localeName, "messages.json"), "utf8"));
+  if (!localeMessages.extensionName?.message || !localeMessages.extensionDescription?.message) {
+    throw new Error(`Chrome locale is incomplete: ${localeName}`);
+  }
+}
+globalThis.chrome = { i18n: { getUILanguage: () => "en-US" } };
+const englishUi = await import("../lib/i18n.js?smoke=en");
+if (englishUi.language !== "en" || englishUi.t("prepareSave") !== "Prepare files and choose a folder") {
+  throw new Error("English UI must be the default for non-Chinese browser locales");
+}
+globalThis.chrome.i18n.getUILanguage = () => "zh-CN";
+const chineseUi = await import("../lib/i18n.js?smoke=zh");
+if (chineseUi.language !== "zh-CN" || chineseUi.t("prepareSave") !== "准备文件并选择保存目录") {
+  throw new Error("Chinese UI must follow a Chinese browser locale");
+}
+const localizedSources = [
+  popupSource,
+  managerSource,
+  fs.readFileSync(path.join(here, "..", "popup.html"), "utf8"),
+  fs.readFileSync(path.join(here, "..", "manager.html"), "utf8"),
+].join("\n");
+const referencedMessageKeys = new Set([
+  ...[...localizedSources.matchAll(/\bt\("([A-Za-z0-9]+)"/g)].map((match) => match[1]),
+  ...[...localizedSources.matchAll(/data-i18n="([A-Za-z0-9]+)"/g)].map((match) => match[1]),
+  ...[...localizedSources.matchAll(/data-i18n-title="([A-Za-z0-9]+)"/g)].map((match) => match[1]),
+]);
+for (const key of referencedMessageKeys) {
+  if (!englishUi.hasMessage(key) || !chineseUi.hasMessage(key)) throw new Error(`Missing UI translation: ${key}`);
 }
 
 console.log(JSON.stringify({

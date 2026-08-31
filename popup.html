@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en" data-i18n-title="extensionName">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,21 +12,21 @@
         <div class="mark">BA</div>
         <div>
           <h1>Bilibili Archive Helper</h1>
-          <p>当前页面 · 登录态 · 串行保存</p>
+          <p data-i18n="tagline">Current page · Signed-in session · Serial save</p>
         </div>
       </header>
 
       <section class="card summary" aria-live="polite">
-        <div class="eyebrow">当前视频</div>
-        <div id="page-title" class="title">等待识别</div>
-        <div id="page-meta" class="meta">请先打开 Bilibili 视频或番剧播放页。</div>
+        <div class="eyebrow" data-i18n="currentVideo">Current video</div>
+        <div id="page-title" class="title" data-i18n="waitingRecognition">Waiting for recognition</div>
+        <div id="page-meta" class="meta" data-i18n="openPagePrompt">Open a Bilibili video or bangumi page first.</div>
       </section>
 
       <section class="card controls">
         <label>
-          <span>画质</span>
+          <span data-i18n="quality">Quality</span>
           <select id="quality">
-            <option value="127">最高可用</option>
+            <option value="127" data-i18n="highestAvailable">Highest available</option>
             <option value="80">1080P</option>
             <option value="64">720P</option>
             <option value="32">480P</option>
@@ -34,37 +34,35 @@
         </label>
 
         <label>
-          <span>历史弹幕</span>
+          <span data-i18n="danmakuHistory">Danmaku history</span>
           <select id="history-mode">
-            <option value="enhanced">增强补全（推荐）</option>
-            <option value="current">当前接口合并</option>
-            <option value="monthly">逐月快照（很慢）</option>
+            <option value="enhanced" data-i18n="enhancedRecommended">Enhanced history (recommended)</option>
+            <option value="current" data-i18n="currentEndpoints">Current endpoints</option>
+            <option value="monthly" data-i18n="monthlySlow">Monthly snapshots (very slow)</option>
           </select>
         </label>
 
         <div class="checks">
-          <label><input id="include-video" type="checkbox" checked> 视频</label>
-          <label><input id="include-danmaku" type="checkbox" checked> ASS 字幕</label>
+          <label><input id="include-video" type="checkbox" checked> <span data-i18n="video">Video</span></label>
+          <label><input id="include-danmaku" type="checkbox" checked> <span data-i18n="assSubtitles">ASS subtitles</span></label>
           <label><input id="include-metadata" type="checkbox" checked> NFO</label>
         </div>
-        <label class="merge-check"><input id="auto-merge" type="checkbox" checked> DASH 下载完成后自动无损合并 MP4</label>
+        <label class="merge-check"><input id="auto-merge" type="checkbox" checked> <span data-i18n="autoMerge">Losslessly merge DASH streams into MP4</span></label>
 
-        <button id="analyze" class="secondary" type="button">重新识别</button>
-        <button id="download" class="primary" type="button" disabled>准备文件并选择保存目录</button>
+        <button id="analyze" class="secondary" type="button" data-i18n="reanalyze">Analyze again</button>
+        <button id="download" class="primary" type="button" disabled data-i18n="prepareSave">Prepare files and choose a folder</button>
       </section>
 
       <section class="card progress-card">
         <div class="progress-head">
-          <span>进度</span>
-          <span id="progress-label">空闲</span>
+          <span data-i18n="progress">Progress</span>
+          <span id="progress-label" data-i18n="idle">Idle</span>
         </div>
         <div class="progress"><div id="progress-bar"></div></div>
-        <pre id="log">未开始。</pre>
+        <pre id="log" data-i18n="notStarted">Not started.</pre>
       </section>
 
-      <footer>
-        只需选择一次目录；不绕过付费墙或 DRM；不读取、导出 Cookie；不修改代理设置。
-      </footer>
+      <footer data-i18n="privacyFooter">Choose a folder once; no paywall or DRM bypass; no cookie export; no proxy changes.</footer>
     </main>
     <script type="module" src="popup.js"></script>
   </body>

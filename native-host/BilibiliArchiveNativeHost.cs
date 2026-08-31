@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -13,7 +14,7 @@ namespace BilibiliArchiveHelper
     internal static class Program
     {
         private const int MaxMessageBytes = 64 * 1024 * 1024;
-        private const string HelperVersion = "0.5.0";
+        private const string HelperVersion = "0.5.1";
         private static bool SelfTestMode;
         private static readonly Stream Input = Console.OpenStandardInput();
         private static readonly Stream Output = Console.OpenStandardOutput();
@@ -24,6 +25,13 @@ namespace BilibiliArchiveHelper
         private static FileStream CurrentFile;
         private static string CurrentFinalPath;
         private static string CurrentTemporaryPath;
+
+        private static string L(string english, string chinese)
+        {
+            return String.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "zh", StringComparison.OrdinalIgnoreCase)
+                ? chinese
+                : english;
+        }
 
         [STAThread]
         private static int Main(string[] args)
@@ -86,7 +94,7 @@ namespace BilibiliArchiveHelper
                     { "helperVersion", HelperVersion },
                     { "ffmpegPath", ffmpeg ?? "" },
                     { "ffmpegVersion", String.IsNullOrEmpty(ffmpeg) ? "" : FirstVersionLine(ffmpeg) },
-                    { "message", String.IsNullOrEmpty(ffmpeg) ? "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示一键安装或手动安装。" : "本地助手已就绪" }
+                    { "message", String.IsNullOrEmpty(ffmpeg) ? L("FFmpeg was not found. Rerun the local-helper installer and follow its automatic or manual installation guidance.", "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示一键安装或手动安装。") : L("The local helper is ready", "本地助手已就绪") }
                 });
                 return;
             }
@@ -96,7 +104,7 @@ namespace BilibiliArchiveHelper
                 StartSession(GetDictionary(message, "merge"));
                 return;
             }
-            if (String.IsNullOrEmpty(SessionRoot)) throw new InvalidOperationException("请先启动保存任务");
+            if (String.IsNullOrEmpty(SessionRoot)) throw new InvalidOperationException(L("Start a save job first", "请先启动保存任务"));
             if (action == "writeText")
             {
                 WriteTextAtomic(ResolveUnderRoot(SessionRoot, GetString(message, "filename")), GetString(message, "content"));
@@ -132,18 +140,18 @@ namespace BilibiliArchiveHelper
                 CompleteMerge();
                 return;
             }
-            throw new InvalidOperationException("不支持的操作：" + action);
+            throw new InvalidOperationException(L("Unsupported action: ", "不支持的操作：") + action);
         }
 
         private static void StartSession(Dictionary<string, object> merge)
         {
-            if (merge == null) throw new InvalidOperationException("任务缺少合并信息");
+            if (merge == null) throw new InvalidOperationException(L("The job is missing merge information", "任务缺少合并信息"));
             if (String.IsNullOrEmpty(FindExecutable("ffmpeg.exe")))
-                throw new FileNotFoundException("未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。");
+                throw new FileNotFoundException(L("FFmpeg was not found. Rerun the local-helper installer and follow its installation guidance.", "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。"));
             CleanupSession();
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "选择 Bilibili 文件保存目录（网络请求仍由 Chrome 发起）";
+                dialog.Description = L("Choose the Bilibili destination folder (network requests remain in Chrome)", "选择 Bilibili 文件保存目录（网络请求仍由 Chrome 发起）");
                 dialog.ShowNewFolderButton = true;
                 if (dialog.ShowDialog() != DialogResult.OK || String.IsNullOrWhiteSpace(dialog.SelectedPath))
                 {
@@ -158,7 +166,7 @@ namespace BilibiliArchiveHelper
 
         private static void StartFile(string relative)
         {
-            if (CurrentFile != null) throw new InvalidOperationException("上一个文件尚未完成");
+            if (CurrentFile != null) throw new InvalidOperationException(L("The previous file is still open", "上一个文件尚未完成"));
             CurrentFinalPath = ResolveUnderRoot(SessionRoot, relative);
             CurrentTemporaryPath = CurrentFinalPath + ".part";
             EnsureDirectory(CurrentFinalPath);
@@ -168,15 +176,15 @@ namespace BilibiliArchiveHelper
 
         private static void WriteChunk(string encoded)
         {
-            if (CurrentFile == null) throw new InvalidOperationException("当前没有打开的媒体文件");
-            if (String.IsNullOrEmpty(encoded)) throw new InvalidOperationException("媒体分块为空");
+            if (CurrentFile == null) throw new InvalidOperationException(L("No media file is open", "当前没有打开的媒体文件"));
+            if (String.IsNullOrEmpty(encoded)) throw new InvalidOperationException(L("The media chunk is empty", "媒体分块为空"));
             byte[] data = Convert.FromBase64String(encoded);
             CurrentFile.Write(data, 0, data.Length);
         }
 
         private static void FinishFile()
         {
-            if (CurrentFile == null) throw new InvalidOperationException("当前没有打开的媒体文件");
+            if (CurrentFile == null) throw new InvalidOperationException(L("No media file is open", "当前没有打开的媒体文件"));
             CurrentFile.Flush(true);
             CurrentFile.Dispose();
             CurrentFile = null;
@@ -199,9 +207,9 @@ namespace BilibiliArchiveHelper
 
         private static void CompleteMerge()
         {
-            if (CurrentFile != null) throw new InvalidOperationException("媒体文件仍在写入，不能开始合并");
+            if (CurrentFile != null) throw new InvalidOperationException(L("A media file is still being written; merging cannot start", "媒体文件仍在写入，不能开始合并"));
             string ffmpeg = FindExecutable("ffmpeg.exe");
-            if (String.IsNullOrEmpty(ffmpeg)) throw new FileNotFoundException("未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。");
+            if (String.IsNullOrEmpty(ffmpeg)) throw new FileNotFoundException(L("FFmpeg was not found. Rerun the local-helper installer and follow its installation guidance.", "未找到 FFmpeg。请重新运行本地助手安装脚本，并按提示安装。"));
             string videoPath = ResolveUnderRoot(SessionRoot, GetString(SessionMerge, "videoFilename"));
             string audioPath = ResolveUnderRoot(SessionRoot, GetString(SessionMerge, "audioFilename"));
             string outputPath = ResolveUnderRoot(SessionRoot, GetString(SessionMerge, "outputFilename"));
@@ -298,7 +306,7 @@ namespace BilibiliArchiveHelper
             bool videoExists = FileExists(videoPath);
             bool audioExists = FileExists(audioPath);
             if (!videoExists || !audioExists)
-                throw new FileNotFoundException(String.Format("视频流或音频流不存在，无法合并（video={0}: {1}; audio={2}: {3}）", videoExists, videoPath, audioExists, audioPath));
+                throw new FileNotFoundException(String.Format(L("The video or audio stream is missing (video={0}: {1}; audio={2}: {3})", "视频流或音频流不存在，无法合并（video={0}: {1}; audio={2}: {3}）"), videoExists, videoPath, audioExists, audioPath));
             EnsureDirectory(outputPath);
             string temporaryOutput = outputPath + ".merging.mp4";
             DeleteFile(temporaryOutput);
@@ -311,14 +319,14 @@ namespace BilibiliArchiveHelper
                     " -map 0:v:0 -map 1:a:0 -c copy -movflags +faststart -f mp4 " + Quote(LongPath(temporaryOutput));
                 string error = RunProcess(ffmpeg, arguments);
                 if (!FileExists(temporaryOutput) || FileLength(temporaryOutput) <= 0)
-                    throw new InvalidOperationException("FFmpeg 未生成有效 MP4" + (String.IsNullOrWhiteSpace(error) ? "" : "：" + error.Trim()));
+                    throw new InvalidOperationException(L("FFmpeg did not create a valid MP4", "FFmpeg 未生成有效 MP4") + (String.IsNullOrWhiteSpace(error) ? "" : ": " + error.Trim()));
                 string ffprobe = FindSiblingOrExecutable(ffmpeg, "ffprobe.exe");
                 if (!String.IsNullOrEmpty(ffprobe))
                 {
                     string probe = RunProcess(ffprobe, "-v error -show_entries stream=codec_type -of default=noprint_wrappers=1 " + Quote(LongPath(temporaryOutput)), true);
                     if (probe.IndexOf("codec_type=video", StringComparison.OrdinalIgnoreCase) < 0 ||
                         probe.IndexOf("codec_type=audio", StringComparison.OrdinalIgnoreCase) < 0)
-                        throw new InvalidOperationException("合并校验失败：输出文件没有同时包含视频流和音频流");
+                        throw new InvalidOperationException(L("Merge validation failed: the output does not contain both video and audio streams", "合并校验失败：输出文件没有同时包含视频流和音频流"));
                 }
                 ReplaceFile(temporaryOutput, outputPath);
             }
@@ -372,16 +380,16 @@ namespace BilibiliArchiveHelper
 
         private static string ResolveUnderRoot(string root, string relative)
         {
-            if (String.IsNullOrWhiteSpace(relative)) throw new InvalidOperationException("文件名为空");
+            if (String.IsNullOrWhiteSpace(relative)) throw new InvalidOperationException(L("The filename is empty", "文件名为空"));
             string normalized = relative.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-            if (Path.IsPathRooted(normalized)) throw new InvalidOperationException("不允许绝对路径：" + relative);
+            if (Path.IsPathRooted(normalized)) throw new InvalidOperationException(L("Absolute paths are not allowed: ", "不允许绝对路径：") + relative);
             string rootFull = Path.GetFullPath(root);
             string full = Path.GetFullPath(Path.Combine(rootFull, normalized));
             string rootPrefix = rootFull.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
                 ? rootFull
                 : rootFull + Path.DirectorySeparatorChar;
             if (!full.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("文件路径超出所选目录：" + relative);
+                throw new InvalidOperationException(L("The path escapes the selected folder: ", "文件路径超出所选目录：") + relative);
             return full;
         }
 
@@ -467,7 +475,7 @@ namespace BilibiliArchiveHelper
                 string[] parts = first.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                 return parts.Length >= 3 ? parts[2] : first;
             }
-            catch { return "已找到"; }
+            catch { return L("found", "已找到"); }
         }
 
         private static string Quote(string value) { return "\"" + value.Replace("\"", "\\\"") + "\""; }
@@ -497,9 +505,9 @@ namespace BilibiliArchiveHelper
             byte[] lengthBytes = ReadExact(4);
             if (lengthBytes == null) return null;
             int length = BitConverter.ToInt32(lengthBytes, 0);
-            if (length <= 0 || length > MaxMessageBytes) throw new InvalidDataException("Native Messaging 消息长度无效：" + length);
+            if (length <= 0 || length > MaxMessageBytes) throw new InvalidDataException(L("Invalid Native Messaging message length: ", "Native Messaging 消息长度无效：") + length);
             byte[] body = ReadExact(length);
-            if (body == null) throw new EndOfStreamException("Native Messaging 消息未完整接收");
+            if (body == null) throw new EndOfStreamException(L("The Native Messaging message was truncated", "Native Messaging 消息未完整接收"));
             return Json.Deserialize<Dictionary<string, object>>(Encoding.UTF8.GetString(body));
         }
 

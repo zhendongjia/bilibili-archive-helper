@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "Bilibili Archive Helper"
+  },
+  "extensionDescription": {
+    "message": "串行保存并合并当前 Bilibili 视频，同时生成 ASS 字幕和 NFO。"
+  }
+}

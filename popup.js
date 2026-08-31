@@ -20,6 +20,9 @@ import {
   toAss,
 } from "./lib/danmaku.js";
 import { buildContext, sanitizeFilename, toVideoNfo, toEpisodeNfo } from "./lib/metadata.js";
+import { language, localizeDocument, t } from "./lib/i18n.js";
+
+localizeDocument();
 
 const elements = {
   pageTitle: document.querySelector("#page-title"),
@@ -42,7 +45,7 @@ let analyzed = null;
 let logLines = [];
 
 function log(message) {
-  const timestamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  const timestamp = new Date().toLocaleTimeString(language, { hour12: false });
   logLines.push(`[${timestamp}] ${message}`);
   logLines = logLines.slice(-80);
   elements.log.textContent = logLines.join("\n");
@@ -65,7 +68,7 @@ async function politeDelay() {
 async function currentTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !/^https:\/\/(?:www\.)?bilibili\.com\//.test(tab.url || "")) {
-    throw new Error("请先打开 Bilibili 视频或番剧播放页");
+    throw new Error(t("openBilibiliPage"));
   }
   return tab;
 }
@@ -77,7 +80,7 @@ async function executeMain(func, args = []) {
     func,
     args,
   });
-  if (!results?.[0]) throw new Error("页面脚本没有返回结果");
+  if (!results?.[0]) throw new Error(t("noPageResult"));
   return results[0].result;
 }
 
@@ -104,7 +107,7 @@ async function pageFetch(url, binary = false) {
       result.error ||= error.message || String(error);
     }
   }
-  if (!result?.ok) throw new Error(`${result?.status || "网络"}：${result?.error || url}`);
+  if (!result?.ok) throw new Error(`${result?.status || t("network")}: ${result?.error || url}`);
   return result;
 }
 
@@ -114,22 +117,22 @@ async function apiJson(url, allowApiError = false) {
   try {
     payload = JSON.parse(response.text);
   } catch {
-    throw new Error(`接口未返回 JSON：${url}`);
+    throw new Error(t("apiNotJson", { url }));
   }
-  if (!allowApiError && Number(payload.code) !== 0) throw new Error(payload.message || `接口错误 ${payload.code}`);
+  if (!allowApiError && Number(payload.code) !== 0) throw new Error(payload.message || t("apiError", { code: payload.code }));
   return payload;
 }
 
 async function analyzePage() {
   elements.analyze.disabled = true;
   elements.download.disabled = true;
-  progress(5, "识别中");
+  progress(5, t("recognizing"));
   logLines = [];
-  log("识别当前页面……");
+  log(t("inspectingPage"));
   try {
     activeTab = await currentTab();
     const page = await executeMain(inspectPageInMainWorld);
-    if (!page.epId && !page.bvid && !page.aid) throw new Error("没有识别到 EPID、BVID 或 AID");
+    if (!page.epId && !page.bvid && !page.aid) throw new Error(t("noVideoId"));
 
     let seasonPayload = null;
     if (page.epId) {
@@ -144,7 +147,7 @@ async function analyzePage() {
     }
 
     const infoUrl = videoInfoUrl(page);
-    if (!infoUrl) throw new Error("无法构造视频信息接口");
+    if (!infoUrl) throw new Error(t("noVideoInfoUrl"));
     const videoPayload = await apiJson(infoUrl);
     let tagsPayload = null;
     const tagUrl = videoTagsUrl(page);
@@ -153,11 +156,11 @@ async function analyzePage() {
         await politeDelay();
         tagsPayload = await apiJson(tagUrl);
       } catch (error) {
-        log(`标签接口失败：${error.message || error}`);
+        log(t("tagApiFailed", { error: error.message || error }));
       }
     }
     const context = buildContext(page, videoPayload, seasonPayload, tagsPayload);
-    if (!context.cid || !context.aid) throw new Error("视频信息缺少 CID 或 AID");
+    if (!context.cid || !context.aid) throw new Error(t("missingCidAid"));
 
     const requestedQuality = Number(elements.quality.value);
     await politeDelay();
@@ -166,16 +169,16 @@ async function analyzePage() {
     analyzed = { page, videoPayload, seasonPayload, tagsPayload, context, media };
 
     elements.pageTitle.textContent = `${context.showTitle} · ${context.title}`;
-    elements.pageMeta.textContent = `${context.bvid || `av${context.aid}`} · CID ${context.cid} · ${Math.round(context.durationSeconds / 60)} 分钟 · ${media.label} · ${media.type === "dash" ? "DASH 双流" : "单文件"}`;
+    elements.pageMeta.textContent = `${context.bvid || `av${context.aid}`} · CID ${context.cid} · ${t("minutes", { count: Math.round(context.durationSeconds / 60) })} · ${media.label} · ${media.type === "dash" ? t("dashDual") : t("singleFile")}`;
     elements.download.disabled = false;
-    progress(100, "识别完成");
-    log(`识别完成：${media.label}，${media.type === "dash" ? "视频/音频分离" : "渐进式单文件"}`);
+    progress(100, t("recognitionComplete"));
+    log(t("recognized", { quality: media.label, format: media.type === "dash" ? t("separatedStreams") : t("progressiveFile") }));
   } catch (error) {
     analyzed = null;
-    elements.pageTitle.textContent = "识别失败";
+    elements.pageTitle.textContent = t("recognitionFailed");
     elements.pageMeta.textContent = error.message || String(error);
-    progress(0, "失败");
-    log(`错误：${error.message || error}`);
+    progress(0, t("failed"));
+    log(t("error", { error: error.message || error }));
   } finally {
     elements.analyze.disabled = false;
   }
@@ -203,47 +206,47 @@ function fillMediaDimensions(mediaSelection, context) {
 
 async function collectDanmaku(context, historyMode) {
   const groups = [];
-  log("下载旧 XML 弹幕……");
+  log(t("downloadingLegacy"));
   try {
     const legacy = await pageFetch(legacyDanmakuUrl(context.cid));
     const parsed = parseLegacyXml(legacy.text);
     groups.push(parsed);
-    log(`旧 XML：${parsed.length} 条`);
+    log(t("legacyCount", { count: parsed.length }));
   } catch (error) {
-    log(`旧 XML 失败：${error.message || error}`);
+    log(t("legacyFailed", { error: error.message || error }));
   }
 
   const segmentCount = Math.max(1, Math.ceil(context.durationSeconds / 360));
   let currentComments = 0;
   for (let index = 1; index <= segmentCount; index += 1) {
-    progress(15 + Math.round(index / segmentCount * 25), `当前弹幕 ${index}/${segmentCount}`);
+    progress(15 + Math.round(index / segmentCount * 25), t("currentDanmaku", { current: index, total: segmentCount }));
     try {
       const response = await pageFetch(danmakuSegmentUrl(context.cid, index), true);
       const parsed = parseProtobufDanmaku(base64ToBytes(response.base64));
       groups.push(parsed);
       currentComments += parsed.length;
     } catch (error) {
-      log(`当前分段 ${index} 失败：${error.message || error}`);
+      log(t("currentSegmentFailed", { index, error: error.message || error }));
     }
     if (index < segmentCount) await politeDelay();
   }
-  log(`当前分段：${segmentCount} 段，${currentComments} 条普通弹幕`);
+  log(t("currentSummary", { segments: segmentCount, count: currentComments }));
 
   const months = historyMonths(publishDate(context), historyMode);
   let historySnapshots = 0;
   let loggedOut = false;
   for (let index = 0; index < months.length; index += 1) {
     const month = months[index];
-    progress(40 + Math.round((index + 1) / Math.max(1, months.length) * 40), `历史弹幕 ${index + 1}/${months.length}`);
+    progress(40 + Math.round((index + 1) / Math.max(1, months.length) * 40), t("historicalDanmaku", { current: index + 1, total: months.length }));
     try {
       const indexPayload = await apiJson(historyIndexUrl(context.cid, month), true);
       if (Number(indexPayload.code) === -101) {
         loggedOut = true;
-        log("历史接口未识别登录态，跳过历史快照");
+        log(t("historyLoginMissing"));
         break;
       }
       if (Number(indexPayload.code) !== 0) {
-        log(`${month} 历史索引：${indexPayload.message || indexPayload.code}`);
+        log(t("historyIndex", { month, message: indexPayload.message || indexPayload.code }));
         await politeDelay();
         continue;
       }
@@ -258,22 +261,22 @@ async function collectDanmaku(context, historyMode) {
         }
       }
     } catch (error) {
-      log(`${month} 历史快照失败：${error.message || error}`);
+      log(t("historyFailed", { month, error: error.message || error }));
     }
     if (index + 1 < months.length) await politeDelay();
   }
-  if (months.length && !loggedOut) log(`历史快照：${historySnapshots}/${months.length} 个有效月份`);
+  if (months.length && !loggedOut) log(t("historySummary", { valid: historySnapshots, total: months.length }));
   return mergeDanmaku(groups);
 }
 
 async function startDownload() {
   elements.download.disabled = true;
   elements.analyze.disabled = true;
-  progress(2, "准备中");
-  log("开始准备下载，所有网络请求保持串行……");
+  progress(2, t("preparing"));
+  log(t("preparingSerial"));
   try {
     if (!analyzed) await analyzePage();
-    if (!analyzed) throw new Error("页面尚未成功识别");
+    if (!analyzed) throw new Error(t("pageNotRecognized"));
 
     const { page, seasonPayload, context } = analyzed;
     const requestedQuality = Number(elements.quality.value);
@@ -285,11 +288,11 @@ async function startDownload() {
     const queue = [];
 
     if (elements.includeMetadata.checked) {
-      progress(10, "生成元数据");
+      progress(10, t("generatingMetadata"));
       const videoNfo = toVideoNfo(context, mediaSelection.media);
       const episodeNfo = seasonPayload ? toEpisodeNfo(context, mediaSelection.media) : videoNfo;
       queue.push(textItem(folderFilename(folder, `${mediaStem}.nfo`), episodeNfo, "application/xml;charset=utf-8"));
-      log("已生成同名 NFO");
+      log(t("nfoGenerated"));
     }
 
     if (elements.includeDanmaku.checked) {
@@ -298,8 +301,8 @@ async function startDownload() {
       const height = mediaSelection.media.height || context.episode?.dimension?.height || context.pageInfo?.dimension?.height || 720;
       const ass = toAss(comments, { width, height, durationSeconds: context.durationSeconds, title: `${context.showTitle} ${context.title}` });
       queue.push(textItem(folderFilename(folder, `${mediaStem}.ass`), ass, "text/x-ssa;charset=utf-8"));
-      if (comments.length) log(`合并后弹幕：${comments.length} 条`);
-      else log("该 CID 当前没有普通弹幕，仍会生成合法的空 ASS，不阻塞视频保存");
+      if (comments.length) log(t("mergedComments", { count: comments.length }));
+      else log(t("noComments"));
     }
 
     let merge = null;
@@ -315,11 +318,11 @@ async function startDownload() {
           keepSources: false,
         };
       }
-      log(mediaSelection.type === "dash" ? "最高画质为 DASH，将先视频、后音频串行下载" : "视频将作为队列最后一项下载");
+      log(mediaSelection.type === "dash" ? t("dashDownload") : t("progressiveQueued"));
     }
 
-    if (!queue.length) throw new Error("没有勾选任何输出");
-    progress(85, "打开保存页面");
+    if (!queue.length) throw new Error(t("noOutputs"));
+    progress(85, t("openingSavePage"));
     const job = {
       id: crypto.randomUUID(),
       createdAt: Date.now(),
@@ -331,12 +334,12 @@ async function startDownload() {
     };
     await chrome.storage.local.set({ pendingDownloadJob: job });
     await chrome.tabs.create({ url: chrome.runtime.getURL(`manager.html?job=${encodeURIComponent(job.id)}`) });
-    progress(100, "等待选择目录");
-    log(`保存页面已打开：${queue.length} 个写入步骤。只需选择一次目录。`);
+    progress(100, t("waitingFolder"));
+    log(t("savePageOpened", { count: queue.length }));
     window.close();
   } catch (error) {
-    progress(0, "失败");
-    log(`错误：${error.message || error}`);
+    progress(0, t("failed"));
+    log(t("error", { error: error.message || error }));
     elements.download.disabled = !analyzed;
   } finally {
     elements.analyze.disabled = false;
