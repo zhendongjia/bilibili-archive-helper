@@ -2,6 +2,8 @@
 
 [English](README.md) | 简体中文
 
+[项目网站](https://zhendongjia.github.io/bilibili-archive-helper/) · [下载最新版本](https://github.com/zhendongjia/bilibili-archive-helper/releases/latest)
+
 这是一个无需构建工具的 Chrome Manifest V3 扩展，用于以严格串行流程归档当前 Bilibili 视频或番剧剧集。
 
 ## 功能

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en" data-language="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07101f">
+    <meta name="description" content="Archive Bilibili videos as a clean MP4, ASS subtitle, and rich NFO metadata set.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Bilibili Archive Helper">
+    <meta property="og:description" content="Clean MP4, ASS, and NFO archives from the Bilibili page already open in Chrome.">
+    <meta property="og:url" content="https://zhendongjia.github.io/bilibili-archive-helper/">
+    <meta property="og:image" content="https://zhendongjia.github.io/bilibili-archive-helper/assets/archive-workflow.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Bilibili Archive Helper">
+    <meta name="twitter:description" content="Clean MP4, ASS, and NFO archives from the Bilibili page already open in Chrome.">
+    <meta name="twitter:image" content="https://zhendongjia.github.io/bilibili-archive-helper/assets/archive-workflow.png">
+    <title>Bilibili Archive Helper</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main" data-copy="skip">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Bilibili Archive Helper home">
+        <span class="brand-mark" aria-hidden="true">BA</span>
+        <span>Bilibili Archive Helper</span>
+      </a>
+      <nav class="header-actions" aria-label="Primary navigation">
+        <a href="#features" data-copy="navFeatures">Features</a>
+        <a href="#install" data-copy="navInstall">Install</a>
+        <a href="#privacy" data-copy="navPrivacy">Privacy</a>
+        <div class="language-switch" role="group" aria-label="Language">
+          <button type="button" data-language-choice="en" aria-pressed="true">EN</button>
+          <button type="button" data-language-choice="zh-CN" aria-pressed="false">中文</button>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <div class="release-pill">
+            <span class="pulse" aria-hidden="true"></span>
+            <span data-copy="releaseLabel">Version 0.5.2 · Chrome MV3</span>
+          </div>
+          <h1 data-copy="heroTitle">A clean Bilibili archive, not a folder of fragments.</h1>
+          <p class="hero-lede" data-copy="heroLede">Save the highest quality your account can access, merge DASH streams locally, recover richer danmaku history, and keep only MP4, ASS, and NFO.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/zhendongjia/bilibili-archive-helper/releases/download/v0.5.2/Bilibili-Archive-Helper-0.5.2.zip" data-download>
+              <span data-copy="download">Download 0.5.2</span>
+              <span aria-hidden="true">↓</span>
+            </a>
+            <a class="button button-secondary" href="https://github.com/zhendongjia/bilibili-archive-helper" data-copy="viewSource">View source on GitHub</a>
+          </div>
+          <p class="checksum"><span>SHA-256</span><code>5DC0ED96CD2B16D9EBD92F2E8FA150C6A3FC726DD562C81F34B814EB9F643499</code></p>
+        </div>
+
+        <div class="workflow-card" aria-label="Archive workflow">
+          <div class="workflow-head">
+            <span data-copy="workflowTitle">One serial, verifiable workflow</span>
+            <span class="status-dot" data-copy="ready">Ready</span>
+          </div>
+          <ol class="workflow-list">
+            <li>
+              <span class="step-index">01</span>
+              <div><strong data-copy="flowChrome">Chrome downloads</strong><small data-copy="flowChromeDetail">Uses your login and SwitchyOmega/PAC rules</small></div>
+            </li>
+            <li>
+              <span class="step-index">02</span>
+              <div><strong data-copy="flowHelper">Local helper writes</strong><small data-copy="flowHelperDetail">No network access, no cookie access</small></div>
+            </li>
+            <li>
+              <span class="step-index">03</span>
+              <div><strong data-copy="flowFfmpeg">FFmpeg validates</strong><small data-copy="flowFfmpegDetail">Lossless mux plus audio/video verification</small></div>
+            </li>
+          </ol>
+          <div class="output-row" aria-label="Final output files">
+            <span><b>MP4</b><small data-copy="videoFile">Video</small></span>
+            <span><b>ASS</b><small data-copy="subtitleFile">Subtitle</small></span>
+            <span><b>NFO</b><small data-copy="metadataFile">Metadata</small></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="trust-strip" aria-label="Key properties">
+        <span data-copy="trustOne">Highest available quality</span>
+        <span data-copy="trustTwo">Serial requests</span>
+        <span data-copy="trustThree">No DRM bypass</span>
+        <span data-copy="trustFour">Windows · Linux · macOS</span>
+      </section>
+
+      <figure class="product-visual">
+        <img src="assets/archive-workflow.png" width="1672" height="941" alt="Chrome sends serial media chunks to a local FFmpeg helper, which creates MP4, ASS, and NFO files" data-alt-copy="visualAlt">
+        <figcaption data-copy="visualCaption">Chrome owns the network. The helper owns local files and FFmpeg. The boundary is deliberate.</figcaption>
+      </figure>
+
+      <section class="section" id="features">
+        <div class="section-heading">
+          <p class="eyebrow" data-copy="featuresEyebrow">Built for durable archives</p>
+          <h2 data-copy="featuresTitle">Everything important stays. The clutter does not.</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <span class="feature-number">01</span>
+            <h3 data-copy="featureQualityTitle">Account-aware quality</h3>
+            <p data-copy="featureQualityBody">Uses the active Bilibili session and selects the highest stream that account can access.</p>
+          </article>
+          <article>
+            <span class="feature-number">02</span>
+            <h3 data-copy="featureDanmakuTitle">Richer danmaku history</h3>
+            <p data-copy="featureDanmakuBody">Combines legacy XML, current protobuf segments, and optional historical snapshots.</p>
+          </article>
+          <article>
+            <span class="feature-number">03</span>
+            <h3 data-copy="featureMetadataTitle">Detailed NFO metadata</h3>
+            <p data-copy="featureMetadataBody">Preserves IDs, episode relationships, artwork, statistics, tags, rights, and stream properties.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section output-section" id="output">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow" data-copy="outputEyebrow">A small, useful result</p>
+          <h2 data-copy="outputTitle">Three files. One stable ASCII name.</h2>
+          <p class="section-lede" data-copy="outputLede">Archive paths use IDs such as Bilibili_BV1QVQRYVE96_P01_1080P. Original-language titles remain inside the subtitle and metadata.</p>
+        </div>
+        <div class="file-stack">
+          <article>
+            <span class="file-extension">.mp4</span>
+            <div><h3 data-copy="mp4Title">Merged video</h3><p data-copy="mp4Body">Lossless DASH mux with verified video and audio streams.</p></div>
+          </article>
+          <article>
+            <span class="file-extension">.ass</span>
+            <div><h3 data-copy="assTitle">Danmaku subtitle</h3><p data-copy="assBody">Scrolling, top, bottom, color, and font-size attributes preserved.</p></div>
+          </article>
+          <article>
+            <span class="file-extension">.nfo</span>
+            <div><h3 data-copy="nfoTitle">Rich metadata</h3><p data-copy="nfoBody">Ready for Kodi, Emby, and Jellyfin, with a detailed Bilibili extension block.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section details-section">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow" data-copy="detailsEyebrow">What gets preserved</p>
+          <h2 data-copy="detailsTitle">Enough context to remain useful years later.</h2>
+        </div>
+        <div class="detail-list" role="list">
+          <span role="listitem">BVID · AID · CID · EPID</span>
+          <span role="listitem" data-copy="detailEpisodes">Parts and episode relationships</span>
+          <span role="listitem" data-copy="detailArtwork">Poster, fanart, uploader avatar</span>
+          <span role="listitem" data-copy="detailStats">Views, danmaku, replies, favorites, coins, shares, likes</span>
+          <span role="listitem" data-copy="detailStreams">Codec, resolution, bitrate, duration</span>
+          <span role="listitem" data-copy="detailRights">Tags, categories, rights, and publication time</span>
+        </div>
+      </section>
+
+      <section class="section install-section" id="install">
+        <div class="section-heading">
+          <p class="eyebrow" data-copy="installEyebrow">Cross-platform setup</p>
+          <h2 data-copy="installTitle">Install the extension, then let the helper handle FFmpeg.</h2>
+          <p class="section-lede" data-copy="installLede">No build step is required. The installers stay in your user account and provide automatic or manual FFmpeg guidance.</p>
+        </div>
+        <div class="platform-grid">
+          <article>
+            <div class="platform-head"><span class="platform-symbol" aria-hidden="true">⊞</span><h3>Windows</h3></div>
+            <code>install-native-host.cmd</code>
+            <p data-copy="windowsInstall">Double-click the installer. If FFmpeg is missing, it can offer WinGet installation.</p>
+          </article>
+          <article>
+            <div class="platform-head"><span class="platform-symbol" aria-hidden="true">⌘</span><h3>macOS</h3></div>
+            <code>sh install-native-host.sh</code>
+            <p data-copy="macInstall">Uses Python 3 and can guide Homebrew installation for missing dependencies.</p>
+          </article>
+          <article>
+            <div class="platform-head"><span class="platform-symbol" aria-hidden="true">$</span><h3>Linux</h3></div>
+            <code>sh install-native-host.sh</code>
+            <p data-copy="linuxInstall">Supports APT, DNF, Pacman, Zypper, and APK, plus common folder pickers.</p>
+          </article>
+        </div>
+        <ol class="install-steps">
+          <li><span>1</span><p data-copy="installStepOne">Extract the ZIP, open chrome://extensions/, enable Developer mode, and load the unpacked folder.</p></li>
+          <li><span>2</span><p data-copy="installStepTwo">Run the native-host installer for your operating system.</p></li>
+          <li><span>3</span><p data-copy="installStepThree">Reload the extension, open a Bilibili playback page, and click the extension icon.</p></li>
+        </ol>
+        <div class="docs-links">
+          <a href="https://github.com/zhendongjia/bilibili-archive-helper/blob/main/README.md" data-copy="englishDocs">English documentation ↗</a>
+          <a href="https://github.com/zhendongjia/bilibili-archive-helper/blob/main/README.zh-CN.md" data-copy="chineseDocs">中文说明 ↗</a>
+        </div>
+      </section>
+
+      <section class="section privacy-section" id="privacy">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow" data-copy="privacyEyebrow">A clear network boundary</p>
+          <h2 data-copy="privacyTitle">Your browser policy stays in charge.</h2>
+        </div>
+        <div class="privacy-grid">
+          <article class="privacy-primary">
+            <span class="privacy-label">Chrome</span>
+            <h3 data-copy="chromeBoundaryTitle">Every network request stays in Chrome</h3>
+            <p data-copy="chromeBoundaryBody">Bilibili API and media requests follow the current Chrome login, proxy, PAC, and SwitchyOmega configuration—even when it differs from the system proxy.</p>
+          </article>
+          <article>
+            <span class="privacy-label" data-copy="localHelperLabel">Local helper</span>
+            <h3 data-copy="helperBoundaryTitle">No network client</h3>
+            <p data-copy="helperBoundaryBody">The helper receives already-downloaded chunks, writes .part files, runs FFmpeg and ffprobe, then removes sources only after validation.</p>
+          </article>
+          <article>
+            <span class="privacy-label" data-copy="permissionsLabel">Permissions</span>
+            <h3 data-copy="permissionsTitle">No cookie or proxy permission</h3>
+            <p data-copy="permissionsBody">The extension does not read, display, or export cookie values and never changes browser, system, or Codex proxy settings.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section faq-section">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow">FAQ</p>
+          <h2 data-copy="faqTitle">The important edge cases, up front.</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary data-copy="faq1080Question">Why might 1080P not appear?</summary>
+            <p data-copy="faq1080Answer">The extension requests the highest stream available to the current signed-in account. Some qualities require login or membership, and the extension does not bypass those restrictions.</p>
+          </details>
+          <details>
+            <summary data-copy="faqFfmpegQuestion">What happens if FFmpeg is missing?</summary>
+            <p data-copy="faqFfmpegAnswer">The save page stops with installation guidance instead of silently leaving raw fragments. Installers can automate supported package managers or show manual commands.</p>
+          </details>
+          <details>
+            <summary data-copy="faqDanmakuQuestion">Is historical danmaku guaranteed complete?</summary>
+            <p data-copy="faqDanmakuAnswer">No. The extension merges every accessible source it can query, but comments already removed by the server cannot be restored.</p>
+          </details>
+          <details>
+            <summary data-copy="faqFailureQuestion">What is kept after a failed merge?</summary>
+            <p data-copy="faqFailureAnswer">Complete source streams are retained to prevent data loss. After a successful ffprobe validation, the intermediate streams are deleted.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="download-panel">
+        <div>
+          <p class="eyebrow" data-copy="downloadEyebrow">Current release</p>
+          <h2 data-copy="downloadTitle">Ready for a cleaner archive?</h2>
+          <p data-copy="downloadBody">Download version 0.5.2, verify the checksum, and load the unpacked extension.</p>
+        </div>
+        <div class="download-panel-actions">
+          <a class="button button-primary" href="https://github.com/zhendongjia/bilibili-archive-helper/releases/download/v0.5.2/Bilibili-Archive-Helper-0.5.2.zip"><span data-copy="downloadZip">Download ZIP</span><span aria-hidden="true">↓</span></a>
+          <a class="release-link" href="https://github.com/zhendongjia/bilibili-archive-helper/releases/tag/v0.5.2" data-copy="releaseNotes">Release notes</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>© 2026 Bilibili Archive Helper</span>
+      <span data-copy="footerNote">Open source. No DRM or paywall bypass.</span>
+      <a href="https://github.com/zhendongjia/bilibili-archive-helper">GitHub ↗</a>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

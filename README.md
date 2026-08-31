@@ -2,6 +2,8 @@
 
 English | [Simplified Chinese](README.zh-CN.md)
 
+[Website](https://zhendongjia.github.io/bilibili-archive-helper/) · [Download the latest release](https://github.com/zhendongjia/bilibili-archive-helper/releases/latest)
+
 A build-free Chrome Manifest V3 extension that archives the current Bilibili video or bangumi episode in a strictly serial workflow.
 
 ## Features
