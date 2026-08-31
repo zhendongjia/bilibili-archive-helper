@@ -31,6 +31,7 @@ const elements = {
   includeVideo: document.querySelector("#include-video"),
   includeDanmaku: document.querySelector("#include-danmaku"),
   includeMetadata: document.querySelector("#include-metadata"),
+  autoMerge: document.querySelector("#auto-merge"),
   analyze: document.querySelector("#analyze"),
   download: document.querySelector("#download"),
   progressLabel: document.querySelector("#progress-label"),
@@ -314,9 +315,18 @@ async function startDownload() {
     const instructions = mergeInstructions(context.baseName, mediaSelection);
     if (instructions) queue.push(textItem(folderFilename(folder, `${mediaStem}_合并说明.txt`), instructions, "text/plain;charset=utf-8"));
 
+    let merge = null;
     if (elements.includeVideo.checked) {
       for (const item of mediaSelection.items) {
         queue.push({ ...item, filename: folderFilename(folder, item.filename) });
+      }
+      if (elements.autoMerge.checked && mediaSelection.type === "dash" && mediaSelection.items.length >= 2) {
+        merge = {
+          videoFilename: folderFilename(folder, mediaSelection.items[0].filename),
+          audioFilename: folderFilename(folder, mediaSelection.items[1].filename),
+          outputFilename: folderFilename(folder, `${mediaStem}.mp4`),
+          keepSources: true,
+        };
       }
       log(mediaSelection.type === "dash" ? "最高画质为 DASH，将先视频、后音频串行下载" : "视频将作为队列最后一项下载");
     }
@@ -330,6 +340,7 @@ async function startDownload() {
       title: `${context.showTitle} · ${context.title}`,
       quality: mediaSelection.label,
       items: queue,
+      merge,
     };
     await chrome.storage.local.set({ pendingDownloadJob: job });
     await chrome.tabs.create({ url: chrome.runtime.getURL(`manager.html?job=${encodeURIComponent(job.id)}`) });

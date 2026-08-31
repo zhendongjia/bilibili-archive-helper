@@ -94,6 +94,19 @@ if (parseProtobufDanmaku(base64ToBytes(configurationOnlySegment)).length !== 0) 
   throw new Error("Configuration-only protobuf segments must not be treated as comments");
 }
 
+const manifest = JSON.parse(fs.readFileSync(path.join(here, "..", "manifest.json"), "utf8"));
+if (manifest.version !== "0.4.0" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
+  throw new Error("Native merge manifest configuration is incomplete");
+}
+const managerSource = fs.readFileSync(path.join(here, "..", "manager.js"), "utf8");
+const popupSource = fs.readFileSync(path.join(here, "..", "popup.js"), "utf8");
+for (const expected of ["com.bilibili_archive_helper.native", "saveAndMerge", "connectNative"]) {
+  if (!managerSource.includes(expected)) throw new Error(`Manager missing native merge token: ${expected}`);
+}
+for (const expected of ["outputFilename", "keepSources: true", "autoMerge.checked"]) {
+  if (!popupSource.includes(expected)) throw new Error(`Popup missing merge job token: ${expected}`);
+}
+
 console.log(JSON.stringify({
   comments: comments.length,
   assDialogues: (ass.match(/^Dialogue:/gm) || []).length,

@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Bilibili Archive Helper",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "串行保存当前 Bilibili 视频、弹幕、ASS 字幕、JSON 元数据和 NFO。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA366ooV58J704QnfFxihQ0Ol+RkD6IXTO/lDobaukVokX+CYXRL+Q7Hh/ePI5Ia88yK9dZ6VLS201256EbHToCaRHBzGAuaQ1yXu7QD/ELzDLpUHrcwmpjuvmCjxiS9mYemnkOO83m7gsn3AUHEHMksyphxOpem+gFeQqJh8wU0faDl1TbHNKUEcL3R7Sxp0ri7EgmOhfM4vOVvtyEeYnoNv+rw2srjZD8qRZaHgyZ2BsjquTtM2ZzBfnYtteyYHNqD1KMRaEJMffrg6FjQB0cLeiu3NS8pQUXWxR0FRh5miex3+PJWupztqBwad16jwRLa6z18Sgbt8jclpbGJovvwIDAQAB",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "unlimitedStorage",
+    "nativeMessaging",
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [

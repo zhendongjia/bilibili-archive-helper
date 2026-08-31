@@ -9,8 +9,11 @@ const elements = {
   log: document.querySelector("#log"),
 };
 
+const NATIVE_HOST = "com.bilibili_archive_helper.native";
 let job = null;
 let abortController = null;
+let nativePort = null;
+let nativeAvailable = false;
 let logLines = [];
 
 function log(message) {
@@ -162,11 +165,63 @@ async function runJob(root) {
   await chrome.storage.local.remove("pendingDownloadJob");
 }
 
+function sendNativeMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendNativeMessage(NATIVE_HOST, message, (response) => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve(response);
+    });
+  });
+}
+
+function runNativeJob() {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    nativePort = chrome.runtime.connectNative(NATIVE_HOST);
+    nativePort.onMessage.addListener((message) => {
+      if (!message || typeof message !== "object") return;
+      if (message.type === "selected") {
+        log(`保存目录：${message.path}`);
+      } else if (message.type === "progress") {
+        progress(Number(message.percent || 0), message.label || "本地助手处理中");
+        if (message.message) log(message.message);
+      } else if (message.type === "completed") {
+        settled = true;
+        progress(100, "保存及合并完成");
+        log(`MP4 已生成：${message.outputFilename || job.merge.outputFilename}`);
+        resolve(message);
+        nativePort?.disconnect();
+      } else if (message.type === "cancelled") {
+        settled = true;
+        reject(new DOMException("已取消目录选择", "AbortError"));
+        nativePort?.disconnect();
+      } else if (message.type === "error") {
+        settled = true;
+        reject(new Error(message.message || "本地助手执行失败"));
+        nativePort?.disconnect();
+      }
+    });
+    nativePort.onDisconnect.addListener(() => {
+      const error = chrome.runtime.lastError;
+      nativePort = null;
+      if (!settled) reject(new Error(error?.message || "本地助手连接已断开"));
+    });
+    nativePort.postMessage({ action: "saveAndMerge", job });
+  });
+}
+
 async function start() {
   try {
     if (!job) throw new Error("没有可执行的保存任务");
-    const root = await window.showDirectoryPicker({ mode: "readwrite", id: "bilibili-archive-helper" });
-    await runJob(root);
+    if (job.merge && nativeAvailable) {
+      await runNativeJob();
+      await chrome.storage.local.remove("pendingDownloadJob");
+      elements.cancel.disabled = true;
+    } else {
+      const root = await window.showDirectoryPicker({ mode: "readwrite", id: "bilibili-archive-helper" });
+      await runJob(root);
+    }
   } catch (error) {
     if (error?.name === "AbortError") {
       progress(0, "已停止");
@@ -179,11 +234,15 @@ async function start() {
     elements.cancel.disabled = true;
   } finally {
     abortController = null;
+    nativePort = null;
   }
 }
 
 elements.start.addEventListener("click", start);
-elements.cancel.addEventListener("click", () => abortController?.abort());
+elements.cancel.addEventListener("click", () => {
+  abortController?.abort();
+  nativePort?.disconnect();
+});
 
 (async () => {
   if (typeof window.showDirectoryPicker !== "function") {
@@ -203,7 +262,22 @@ elements.cancel.addEventListener("click", () => abortController?.abort());
   }
   elements.title.textContent = job.title;
   elements.meta.textContent = `${job.quality} · ${job.items.length} 个文件 · 所有网络请求串行执行`;
+  if (job.merge) {
+    try {
+      const status = await sendNativeMessage({ action: "ping" });
+      if (!status?.ok) throw new Error(status?.message || "本地助手未就绪");
+      nativeAvailable = true;
+      elements.start.textContent = "选择目录、保存并自动合并 MP4";
+      elements.meta.textContent += ` · FFmpeg ${status.ffmpegVersion || "已就绪"}`;
+      log(`本地合并助手已就绪：${status.ffmpegPath}`);
+    } catch (error) {
+      nativeAvailable = false;
+      elements.start.textContent = "选择目录并保存（暂不自动合并）";
+      log(`未连接本地合并助手：${error.message || error}`);
+      log("将使用浏览器保存原始双流；安装 native-host/install.ps1 后可自动合并。");
+    }
+  }
   elements.start.disabled = false;
-  logLines = [];
+  if (!job.merge) logLines = [];
   log("任务已就绪，请选择一次保存目录。媒体链接有时效，建议立即开始。");
 })();
