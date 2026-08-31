@@ -1,0 +1,20 @@
+{
+  "ffmpegWingetUnavailable": "未找到 FFmpeg，且 WinGet 不可用。",
+  "installFfmpegManual": "请从 https://ffmpeg.org/download.html 安装 FFmpeg，并将 ffmpeg 加入 PATH。",
+  "installFfmpegPrompt": "未找到 FFmpeg。现在通过 WinGet 安装 Gyan.FFmpeg 吗？[Y/n]",
+  "ffmpegSkipped": "已跳过 FFmpeg 安装。",
+  "ffmpegLater": "稍后可运行：winget install --id Gyan.FFmpeg --exact --source winget",
+  "ffmpegInstalling": "正在通过 WinGet 安装 Gyan.FFmpeg……",
+  "wingetFailed": "WinGet 安装失败，退出代码为 {0}。",
+  "wingetRetry": "请手动重试：winget install --id Gyan.FFmpeg --exact --source winget",
+  "manifestKeyMissing": "manifest.json 缺少扩展密钥",
+  "installed": "Bilibili Archive Helper 本地助手安装成功。",
+  "extensionId": "扩展 ID：{0}",
+  "nativeHost": "本地助手：{0}",
+  "networkNone": "网络访问：无（所有媒体请求均由 Chrome 发起）",
+  "ffmpegPath": "FFmpeg：{0}",
+  "ffmpegStillMissing": "仍未找到 FFmpeg，自动合并 MP4 将保持禁用。",
+  "installGuide": "安装指南：https://ffmpeg.org/download.html",
+  "reload": "请在 chrome://extensions/ 重新加载扩展，然后重新打开保存页。",
+  "uninstalled": "Bilibili Archive Helper 本地助手已卸载。"
+}

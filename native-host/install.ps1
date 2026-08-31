@@ -2,6 +2,14 @@
 param([switch]$InstallFfmpeg)
 
 $ErrorActionPreference = 'Stop'
+$messageLocale = if ($PSUICulture -like 'zh*') { 'zh-CN' } else { 'en' }
+$messagePath = Join-Path $PSScriptRoot "install-messages.$messageLocale.json"
+$messages = Get-Content -LiteralPath $messagePath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+function Msg {
+    param([string]$Key)
+    return [string]$messages.$Key
+}
 
 function Find-Ffmpeg {
     $command = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -26,25 +34,25 @@ function Install-FfmpegIfRequested {
     param([bool]$Force)
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $winget) {
-        Write-Warning 'FFmpeg was not found and WinGet is unavailable.'
-        Write-Host 'Install FFmpeg from https://ffmpeg.org/download.html and add ffmpeg to PATH.'
+        Write-Warning (Msg 'ffmpegWingetUnavailable')
+        Write-Host (Msg 'installFfmpegManual')
         return
     }
     $approved = $Force
     if (-not $approved) {
-        $answer = Read-Host 'FFmpeg was not found. Install Gyan.FFmpeg with WinGet now? [Y/n]'
+        $answer = Read-Host (Msg 'installFfmpegPrompt')
         $approved = [string]::IsNullOrWhiteSpace($answer) -or $answer.Trim().StartsWith('y', [StringComparison]::OrdinalIgnoreCase)
     }
     if (-not $approved) {
-        Write-Host 'Skipped FFmpeg installation.'
-        Write-Host 'Later you can run: winget install --id Gyan.FFmpeg --exact --source winget'
+        Write-Host (Msg 'ffmpegSkipped')
+        Write-Host (Msg 'ffmpegLater')
         return
     }
-    Write-Host 'Installing Gyan.FFmpeg with WinGet...'
+    Write-Host (Msg 'ffmpegInstalling')
     & $winget.Source install --id Gyan.FFmpeg --exact --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "WinGet failed with exit code $LASTEXITCODE."
-        Write-Host 'Retry manually: winget install --id Gyan.FFmpeg --exact --source winget'
+        Write-Warning ((Msg 'wingetFailed') -f $LASTEXITCODE)
+        Write-Host (Msg 'wingetRetry')
     }
 }
 
@@ -60,7 +68,7 @@ $extensionRoot = Split-Path -Parent $PSScriptRoot
 $extensionManifestPath = Join-Path $extensionRoot 'manifest.json'
 $sourcePath = Join-Path $PSScriptRoot 'BilibiliArchiveNativeHost.cs'
 $extensionManifest = Get-Content -LiteralPath $extensionManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-if (-not $extensionManifest.key) { throw 'manifest.json is missing the extension key' }
+if (-not $extensionManifest.key) { throw (Msg 'manifestKeyMissing') }
 
 $keyBytes = [Convert]::FromBase64String([string]$extensionManifest.key)
 $sha256 = [Security.Cryptography.SHA256]::Create()
@@ -122,14 +130,14 @@ if (-not $ffmpegPath) {
 }
 
 Write-Host ''
-Write-Host 'Bilibili Archive Helper native host installed successfully.' -ForegroundColor Green
-Write-Host "Extension ID: $extensionId"
-Write-Host "Native host: $hostExe"
-Write-Host 'Network access: none (all media requests remain in Chrome)'
+Write-Host (Msg 'installed') -ForegroundColor Green
+Write-Host ((Msg 'extensionId') -f $extensionId)
+Write-Host ((Msg 'nativeHost') -f $hostExe)
+Write-Host (Msg 'networkNone')
 if ($ffmpegPath) {
-    Write-Host "FFmpeg: $ffmpegPath"
+    Write-Host ((Msg 'ffmpegPath') -f $ffmpegPath)
 } else {
-    Write-Warning 'FFmpeg is still missing. Automatic MP4 merging will remain disabled.'
-    Write-Host 'Install guide: https://ffmpeg.org/download.html'
+    Write-Warning (Msg 'ffmpegStillMissing')
+    Write-Host (Msg 'installGuide')
 }
-Write-Host 'Reload the extension at chrome://extensions/ and reopen the save page.'
+Write-Host (Msg 'reload')

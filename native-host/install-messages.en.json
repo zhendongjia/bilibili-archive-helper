@@ -1,0 +1,20 @@
+{
+  "ffmpegWingetUnavailable": "FFmpeg was not found and WinGet is unavailable.",
+  "installFfmpegManual": "Install FFmpeg from https://ffmpeg.org/download.html and add ffmpeg to PATH.",
+  "installFfmpegPrompt": "FFmpeg was not found. Install Gyan.FFmpeg with WinGet now? [Y/n]",
+  "ffmpegSkipped": "Skipped FFmpeg installation.",
+  "ffmpegLater": "Later you can run: winget install --id Gyan.FFmpeg --exact --source winget",
+  "ffmpegInstalling": "Installing Gyan.FFmpeg with WinGet...",
+  "wingetFailed": "WinGet failed with exit code {0}.",
+  "wingetRetry": "Retry manually: winget install --id Gyan.FFmpeg --exact --source winget",
+  "manifestKeyMissing": "manifest.json is missing the extension key",
+  "installed": "Bilibili Archive Helper native host installed successfully.",
+  "extensionId": "Extension ID: {0}",
+  "nativeHost": "Native host: {0}",
+  "networkNone": "Network access: none (all media requests remain in Chrome)",
+  "ffmpegPath": "FFmpeg: {0}",
+  "ffmpegStillMissing": "FFmpeg is still missing. Automatic MP4 merging will remain disabled.",
+  "installGuide": "Install guide: https://ffmpeg.org/download.html",
+  "reload": "Reload the extension at chrome://extensions/ and reopen the save page.",
+  "uninstalled": "Bilibili Archive Helper native host uninstalled."
+}

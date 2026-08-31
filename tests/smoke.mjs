@@ -98,7 +98,7 @@ if (parseProtobufDanmaku(base64ToBytes(configurationOnlySegment)).length !== 0) 
 }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(here, "..", "manifest.json"), "utf8"));
-if (manifest.version !== "0.5.1" || manifest.default_locale !== "en" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
+if (manifest.version !== "0.5.2" || manifest.default_locale !== "en" || !manifest.permissions.includes("nativeMessaging") || !manifest.key) {
   throw new Error("Native merge manifest configuration is incomplete");
 }
 const managerSource = fs.readFileSync(path.join(here, "..", "manager.js"), "utf8");
@@ -114,6 +114,9 @@ for (const removedOutput of ["_视频信息.json", "_剧集信息.json", "_标�
 }
 const windowsHostSource = fs.readFileSync(path.join(here, "..", "native-host", "BilibiliArchiveNativeHost.cs"), "utf8");
 const unixHostSource = fs.readFileSync(path.join(here, "..", "native-host", "bilibili_archive_native_host.py"), "utf8");
+if (!windowsHostSource.includes('HelperVersion = "0.5.2"') || !unixHostSource.includes('HOST_VERSION = "0.5.2"')) {
+  throw new Error("Native-helper versions must match the extension release");
+}
 for (const forbiddenNetworkClient of ["HttpClient", "urllib.request", "urlopen("]) {
   if (windowsHostSource.includes(forbiddenNetworkClient) || unixHostSource.includes(forbiddenNetworkClient)) {
     throw new Error(`Native host must not perform network requests: ${forbiddenNetworkClient}`);
@@ -149,6 +152,17 @@ for (const localeName of ["en", "zh_CN"]) {
   if (!localeMessages.extensionName?.message || !localeMessages.extensionDescription?.message) {
     throw new Error(`Chrome locale is incomplete: ${localeName}`);
   }
+}
+for (const localeName of ["en", "zh-CN"]) {
+  const installerMessages = JSON.parse(fs.readFileSync(path.join(here, "..", "native-host", `install-messages.${localeName}.json`), "utf8"));
+  if (!installerMessages.installed || !installerMessages.reload || !installerMessages.uninstalled) {
+    throw new Error(`Installer locale is incomplete: ${localeName}`);
+  }
+}
+const windowsInstaller = fs.readFileSync(path.join(here, "..", "native-host", "install.ps1"), "utf8");
+const unixInstaller = fs.readFileSync(path.join(here, "..", "native-host", "install-unix.sh"), "utf8");
+if (!windowsInstaller.includes("$PSUICulture") || !unixInstaller.includes("LC_MESSAGES")) {
+  throw new Error("Installers must follow the operating-system language");
 }
 globalThis.chrome = { i18n: { getUILanguage: () => "en-US" } };
 const englishUi = await import("../lib/i18n.js?smoke=en");

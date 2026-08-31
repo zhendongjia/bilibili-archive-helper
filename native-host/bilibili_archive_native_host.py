@@ -20,7 +20,7 @@ import traceback
 from typing import Any, BinaryIO, Dict, List, Optional
 
 
-HOST_VERSION = "0.5.1"
+HOST_VERSION = "0.5.2"
 MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 session_root: Optional[Path] = None
 session_merge: Optional[Dict[str, Any]] = None

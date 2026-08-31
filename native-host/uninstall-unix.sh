@@ -3,6 +3,10 @@ set -eu
 
 HOST_NAME="com.bilibili_archive_helper.native"
 SYSTEM_NAME=$(uname -s)
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}" in
+  zh*) MSG_UNINSTALLED="Bilibili Archive Helper 本地助手已卸载。" ;;
+  *) MSG_UNINSTALLED="Bilibili Archive Helper native host uninstalled." ;;
+esac
 if [ "$SYSTEM_NAME" = "Darwin" ]; then
   INSTALL_ROOT="$HOME/Library/Application Support/BilibiliArchiveHelper/NativeHost"
   MANIFEST_DIRS="
@@ -24,4 +28,4 @@ printf '%s\n' "$MANIFEST_DIRS" | while IFS= read -r directory; do
   rm -f "$directory/$HOST_NAME.json"
 done
 rm -rf "$INSTALL_ROOT"
-echo "Bilibili Archive Helper native host uninstalled."
+echo "$MSG_UNINSTALLED"

@@ -6,6 +6,43 @@ EXTENSION_ID="decnollliepohlnakpbbbkadcpgjblda"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SYSTEM_NAME=$(uname -s)
 
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}" in
+  zh*)
+    MSG_BREW_MISSING="Homebrew 不可用。请从 https://brew.sh/ 安装，然后运行：brew install"
+    MSG_NO_MANAGER="未找到受支持的包管理器。请手动安装这些软件包："
+    MSG_PY_REQUIRED="Linux/macOS 本地助手需要 Python 3。"
+    MSG_PY_INSTALL="现在安装 Python 3 吗？"
+    MSG_PY_MISSING="仍未找到 Python 3。请安装后重新运行此脚本。"
+    MSG_FFMPEG_REQUIRED="自动合并 MP4 需要 FFmpeg。"
+    MSG_FFMPEG_INSTALL="现在安装 FFmpeg 吗？"
+    MSG_FFMPEG_MISSING="仍未找到 FFmpeg。安装指南：https://ffmpeg.org/download.html"
+    MSG_PICKER_REQUIRED="需要图形目录选择器（zenity、kdialog 或 tkinter）。"
+    MSG_ZENITY_INSTALL="现在安装 zenity 吗？"
+    MSG_INSTALLED="Bilibili Archive Helper 本地助手安装成功。"
+    MSG_EXTENSION_ID="扩展 ID"
+    MSG_NATIVE_HOST="本地助手"
+    MSG_NETWORK_NONE="网络访问：无（所有媒体请求均由 Chrome 发起）"
+    MSG_RELOAD="请重新加载扩展，然后重新打开保存页。"
+    ;;
+  *)
+    MSG_BREW_MISSING="Homebrew is unavailable. Install it from https://brew.sh/ then run: brew install"
+    MSG_NO_MANAGER="No supported package manager was found. Install these packages manually:"
+    MSG_PY_REQUIRED="Python 3 is required by the Linux/macOS native host."
+    MSG_PY_INSTALL="Install Python 3 now?"
+    MSG_PY_MISSING="Python 3 is still missing. Install it, then rerun this script."
+    MSG_FFMPEG_REQUIRED="FFmpeg is required for automatic MP4 merging."
+    MSG_FFMPEG_INSTALL="Install FFmpeg now?"
+    MSG_FFMPEG_MISSING="FFmpeg is still missing. Install guide: https://ffmpeg.org/download.html"
+    MSG_PICKER_REQUIRED="A graphical folder picker is required (zenity, kdialog, or tkinter)."
+    MSG_ZENITY_INSTALL="Install zenity now?"
+    MSG_INSTALLED="Bilibili Archive Helper native host installed successfully."
+    MSG_EXTENSION_ID="Extension ID"
+    MSG_NATIVE_HOST="Native host"
+    MSG_NETWORK_NONE="Network access: none (all media requests remain in Chrome)"
+    MSG_RELOAD="Reload the extension and reopen the save page."
+    ;;
+esac
+
 ask_yes() {
   if [ ! -t 0 ]; then return 1; fi
   printf '%s [Y/n] ' "$1"
@@ -24,7 +61,7 @@ install_packages() {
       brew install $packages
       return
     fi
-    echo "Homebrew is unavailable. Install it from https://brew.sh/ then run: brew install $packages"
+    echo "$MSG_BREW_MISSING $packages"
     return 1
   fi
 
@@ -46,36 +83,36 @@ install_packages() {
     # shellcheck disable=SC2086
     $SUDO apk add $packages
   else
-    echo "No supported package manager was found. Install these packages manually: $packages"
+    echo "$MSG_NO_MANAGER $packages"
     return 1
   fi
 }
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "Python 3 is required by the Linux/macOS native host."
-  if ask_yes "Install Python 3 now?"; then
+  echo "$MSG_PY_REQUIRED"
+  if ask_yes "$MSG_PY_INSTALL"; then
     if [ "$SYSTEM_NAME" = "Darwin" ]; then install_packages python; else install_packages python3; fi
   fi
 fi
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "Python 3 is still missing. Install it, then rerun this script."
+  echo "$MSG_PY_MISSING"
   exit 1
 fi
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
-  echo "FFmpeg is required for automatic MP4 merging."
-  if ask_yes "Install FFmpeg now?"; then install_packages ffmpeg || true; fi
+  echo "$MSG_FFMPEG_REQUIRED"
+  if ask_yes "$MSG_FFMPEG_INSTALL"; then install_packages ffmpeg || true; fi
 fi
 if ! command -v ffmpeg >/dev/null 2>&1; then
-  echo "FFmpeg is still missing. Install guide: https://ffmpeg.org/download.html"
+  echo "$MSG_FFMPEG_MISSING"
 fi
 
 if [ "$SYSTEM_NAME" != "Darwin" ] &&
    ! command -v zenity >/dev/null 2>&1 &&
    ! command -v kdialog >/dev/null 2>&1 &&
    ! python3 -c 'import tkinter' >/dev/null 2>&1; then
-  echo "A graphical folder picker is required (zenity, kdialog, or tkinter)."
-  if ask_yes "Install zenity now?"; then install_packages zenity || true; fi
+  echo "$MSG_PICKER_REQUIRED"
+  if ask_yes "$MSG_ZENITY_INSTALL"; then install_packages zenity || true; fi
 fi
 
 if [ "$SYSTEM_NAME" = "Darwin" ]; then
@@ -134,8 +171,9 @@ printf '%s\n' "$MANIFEST_DIRS" | while IFS= read -r directory; do
 done
 
 echo
-echo "Bilibili Archive Helper native host installed successfully."
-echo "Extension ID: $EXTENSION_ID"
-echo "Native host: $HOST_WRAPPER"
+echo "$MSG_INSTALLED"
+echo "$MSG_EXTENSION_ID: $EXTENSION_ID"
+echo "$MSG_NATIVE_HOST: $HOST_WRAPPER"
+echo "$MSG_NETWORK_NONE"
 if command -v ffmpeg >/dev/null 2>&1; then echo "FFmpeg: $(command -v ffmpeg)"; fi
-echo "Reload the extension and reopen the save page."
+echo "$MSG_RELOAD"

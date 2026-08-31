@@ -14,7 +14,7 @@ namespace BilibiliArchiveHelper
     internal static class Program
     {
         private const int MaxMessageBytes = 64 * 1024 * 1024;
-        private const string HelperVersion = "0.5.1";
+        private const string HelperVersion = "0.5.2";
         private static bool SelfTestMode;
         private static readonly Stream Input = Console.OpenStandardInput();
         private static readonly Stream Output = Console.OpenStandardOutput();
